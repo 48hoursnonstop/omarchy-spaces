@@ -8,6 +8,12 @@
 
 Spaces is a workspace switcher for the [Omarchy](https://omarchy.org) bar. Each workspace shows the icons of the apps open on it. The active one slides open, and the focused window is highlighted.
 
+Hover another workspace to see it live, laid out the way it is on screen. Click a window in the preview to jump to it.
+
+<p align="center">
+  <img src=".github/assets/preview.png" width="560" alt="Live preview of workspace 6 showing btop and fastfetch side by side" />
+</p>
+
 ## Install
 
 ```sh
@@ -22,6 +28,7 @@ Requires Omarchy with the Quickshell bar and Hyprland.
 - Click a workspace to go there. Click an icon to focus that window.
 - Scroll over the widget to move between workspaces.
 - Hover an icon to see the window title.
+- Hover another workspace to preview it. Click a window in the preview to focus it.
 - Right-click the widget, or click the gear that shows on hover, to open settings.
 
 ## Settings
@@ -34,6 +41,12 @@ To open settings with a key, add this to `~/.config/hypr/bindings.lua`:
 
 ```lua
 o.bind("SUPER + CTRL + ALT + S", "Spaces settings", "omarchy-shell insanearts.spaces toggle")
+```
+
+To preview a workspace from a key or script, without hovering:
+
+```sh
+omarchy-shell insanearts.spaces peek 3
 ```
 
 Settings can also be set from a script:
