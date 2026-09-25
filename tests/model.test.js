@@ -114,4 +114,43 @@ test("normalizeAddress strips 0x and lowercases", () => {
   assert.strictEqual(M.normalizeAddress("624fac"), "624fac")
 })
 
+test("monitorArea removes reserved space in logical coords", () => {
+  const a = M.monitorArea({ x: 0, y: 0, width: 3440, height: 1440, scale: 1.25, reserved: [0, 35, 0, 0] })
+  assert.deepStrictEqual(a, { x: 0, y: 35, width: 2752, height: 1117 })
+  assert.strictEqual(M.monitorArea(null), null)
+})
+
+test("previewLayout scales real positions and puts floating last", () => {
+  const area = { x: 0, y: 0, width: 1000, height: 500 }
+  const out = M.previewLayout([
+    { address: "f", at: [100, 100], size: [200, 100], floating: true },
+    { address: "a", at: [0, 0], size: [500, 500] },
+    { address: "b", at: [500, 0], size: [500, 500] }
+  ], area, 100, 50)
+  assert.deepStrictEqual(out.map(p => p.address), ["a", "b", "f"])
+  assert.deepStrictEqual(out[1], { address: "b", x: 50, y: 0, width: 50, height: 50, floating: false })
+  assert.deepStrictEqual([out[2].x, out[2].y, out[2].width, out[2].height], [10, 10, 20, 10])
+})
+
+test("previewLayout clamps windows hanging off screen", () => {
+  const out = M.previewLayout([{ address: "a", at: [-100, 0], size: [300, 100] }], { x: 0, y: 0, width: 1000, height: 1000 }, 100, 100)
+  assert.deepStrictEqual([out[0].x, out[0].width], [0, 20])
+})
+
+test("previewLayout falls back to a grid without positions", () => {
+  const out = M.previewLayout([{ address: "a" }, { address: "b" }, { address: "c" }], null, 100, 100)
+  assert.strictEqual(out.length, 3)
+  assert.strictEqual(out[0].x, 0)
+  assert.ok(out[1].x > 0)
+  assert.ok(out[2].y > 0)
+})
+
+test("preview settings validate", () => {
+  const s = M.resolveSettings({ previewSize: "huge", previews: false })
+  assert.strictEqual(s.previewSize, "medium")
+  assert.strictEqual(s.previews, false)
+  assert.strictEqual(s.previewLive, true)
+  assert.strictEqual(M.previewWidth("large"), 520)
+})
+
 if (failed) { console.log(failed + " failed"); process.exit(1) }

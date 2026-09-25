@@ -27,7 +27,10 @@ var DEFAULTS = {
   tooltips: true,
   density: "normal",          // "compact" | "normal" | "roomy"
   activeClick: "none",        // clicking the active pill: "none" | "previous"
-  settingsButton: "hover"     // gear button: "hover" | "always" | "never"
+  settingsButton: "hover",    // gear button: "hover" | "always" | "never"
+  previews: true,             // live preview of a workspace on hover
+  previewSize: "medium",      // "small" | "medium" | "large"
+  previewLive: true           // keep previews streaming; false = one frame
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]
@@ -35,6 +38,7 @@ var ICON_STYLES = ["color", "mono"]
 var DENSITIES = ["compact", "normal", "roomy"]
 var ACTIVE_CLICKS = ["none", "previous"]
 var SETTINGS_BUTTONS = ["hover", "always", "never"]
+var PREVIEW_SIZES = ["small", "medium", "large"]
 var ACTIVE_STYLES = ["subtle", "solid", "accent"]
 var LABEL_STYLES = ["number", "glyph", "none"]
 var SPEEDS = ["slow", "normal", "fast"]
@@ -80,7 +84,10 @@ function resolveSettings(raw) {
     tooltips: bool(s.tooltips, d.tooltips),
     density: oneOf(s.density, DENSITIES, d.density),
     activeClick: oneOf(s.activeClick, ACTIVE_CLICKS, d.activeClick),
-    settingsButton: oneOf(s.settingsButton, SETTINGS_BUTTONS, d.settingsButton)
+    settingsButton: oneOf(s.settingsButton, SETTINGS_BUTTONS, d.settingsButton),
+    previews: bool(s.previews, d.previews),
+    previewSize: oneOf(s.previewSize, PREVIEW_SIZES, d.previewSize),
+    previewLive: bool(s.previewLive, d.previewLive)
   }
 }
 
@@ -246,6 +253,79 @@ function iconNameFromPath(path) {
   return dot > 0 ? file.slice(0, dot) : file
 }
 
+// Width of the workspace miniature, in unscaled px.
+function previewWidth(size) {
+  if (size === "small") return 260
+  if (size === "large") return 520
+  return 380
+}
+
+// Usable area of a monitor in logical layout coordinates, i.e. without the
+// space reserved by bars. `monitor`: { x, y, width, height, scale, reserved }
+// where width/height are physical pixels and reserved is [l, t, r, b].
+function monitorArea(monitor) {
+  if (!monitor || !monitor.width || !monitor.height) return null
+  var scale = monitor.scale > 0 ? monitor.scale : 1
+  var r = monitor.reserved && monitor.reserved.length === 4 ? monitor.reserved : [0, 0, 0, 0]
+  var w = monitor.width / scale
+  var h = monitor.height / scale
+  return {
+    x: (monitor.x || 0) + r[0],
+    y: (monitor.y || 0) + r[1],
+    width: Math.max(1, w - r[0] - r[2]),
+    height: Math.max(1, h - r[1] - r[3])
+  }
+}
+
+// Places windows inside a width x height miniature of `area`, where they
+// really are on screen. Floating windows come last so they draw on top.
+// Windows without a known position are laid out in an even grid instead.
+//   windows: [{ address, at: [x, y] | null, size: [w, h] | null, floating }]
+function previewLayout(windows, area, width, height) {
+  var placed = []
+  var known = area && windows.length > 0 && windows.every(function(w) { return w.at && w.size })
+
+  if (known) {
+    var sx = width / area.width
+    var sy = height / area.height
+    for (var i = 0; i < windows.length; i++) {
+      var w = windows[i]
+      var x = (w.at[0] - area.x) * sx
+      var y = (w.at[1] - area.y) * sy
+      var ww = w.size[0] * sx
+      var hh = w.size[1] * sy
+      // Clamp into the miniature; windows can hang off the edge.
+      var cx = Math.max(0, Math.min(width - 4, x))
+      var cy = Math.max(0, Math.min(height - 4, y))
+      placed.push({
+        address: w.address,
+        x: cx, y: cy,
+        width: Math.max(4, Math.min(width - cx, ww - (cx - x))),
+        height: Math.max(4, Math.min(height - cy, hh - (cy - y))),
+        floating: !!w.floating
+      })
+    }
+  } else {
+    var n = windows.length
+    var cols = Math.max(1, Math.ceil(Math.sqrt(n)))
+    var rows = Math.max(1, Math.ceil(n / cols))
+    var gap = 4
+    var cw = (width - gap * (cols - 1)) / cols
+    var ch = (height - gap * (rows - 1)) / rows
+    for (var j = 0; j < n; j++) {
+      placed.push({
+        address: windows[j].address,
+        x: (j % cols) * (cw + gap), y: Math.floor(j / cols) * (ch + gap),
+        width: cw, height: ch,
+        floating: false
+      })
+    }
+  }
+
+  placed.sort(function(l, r) { return (l.floating ? 1 : 0) - (r.floating ? 1 : 0) })
+  return placed
+}
+
 // Next workspace id when scrolling; wraps around.
 function stepWorkspace(ids, current, delta) {
   if (!ids.length) return current
@@ -267,7 +347,8 @@ function mergedEntry(moduleName, current, delta) {
 if (typeof module !== "undefined") {
   module.exports = {
     DEFAULTS: DEFAULTS, resolveSettings: resolveSettings, showsApps: showsApps,
-    densityMetrics: densityMetrics, normalizeAddress: normalizeAddress, durationFor: durationFor,
+    densityMetrics: densityMetrics, normalizeAddress: normalizeAddress,
+    previewWidth: previewWidth, monitorArea: monitorArea, previewLayout: previewLayout, durationFor: durationFor,
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
     focusedLabel: focusedLabel, webAppHost: webAppHost, iconPathScore: iconPathScore,
