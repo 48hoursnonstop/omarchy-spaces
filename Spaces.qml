@@ -425,6 +425,27 @@ Panel {
     onTriggered: if (!preview.containsMouse) root.hidePreview()
   }
 
+  // Opens the preview for a workspace without hovering, e.g. from a
+  // keybinding. Closes on its own unless the pointer moves onto the card.
+  function peek(id) {
+    var idx = root.workspaceIds.indexOf(Number(id))
+    var pill = idx >= 0 ? pillRepeater.itemAt(idx) : null
+    if (!pill || !pill.occupied) return false
+    previewHideTimer.stop()
+    root.previewPill = pill
+    root.previewWorkspaceId = pill.workspaceId
+    root.placePreviewAnchor(root.previewOpen)
+    root.previewWanted = true
+    peekTimer.restart()
+    return true
+  }
+
+  Timer {
+    id: peekTimer
+    interval: 2500
+    onTriggered: if (!preview.containsMouse) root.hidePreview()
+  }
+
   onOpenedChanged: if (opened) hidePreview()
 
   // ------------------------------------------------------------ IPC
@@ -437,6 +458,7 @@ Panel {
     function show(): void { root.open() }
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
+    function peek(workspace: string): string { return root.peek(workspace) ? "ok" : "empty" }
   }
 
   // ------------------------------------------------------------ bar widget
@@ -465,6 +487,7 @@ Panel {
     spacing: Style.space(root.metrics.gap)
 
     Repeater {
+      id: pillRepeater
       model: ScriptModel { values: root.workspaceIds }
 
       delegate: Item {
