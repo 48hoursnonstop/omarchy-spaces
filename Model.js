@@ -30,7 +30,8 @@ var DEFAULTS = {
   settingsButton: "hover",    // gear button: "hover" | "always" | "never"
   previews: true,             // live preview of a workspace on hover
   previewSize: "medium",      // "small" | "medium" | "large"
-  previewLive: true           // keep previews streaming; false = one frame
+  previewLive: true,          // keep previews streaming; false = one frame
+  agentStatus: true           // badges for coding agents running in terminals
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]
@@ -87,7 +88,8 @@ function resolveSettings(raw) {
     settingsButton: oneOf(s.settingsButton, SETTINGS_BUTTONS, d.settingsButton),
     previews: bool(s.previews, d.previews),
     previewSize: oneOf(s.previewSize, PREVIEW_SIZES, d.previewSize),
-    previewLive: bool(s.previewLive, d.previewLive)
+    previewLive: bool(s.previewLive, d.previewLive),
+    agentStatus: bool(s.agentStatus, d.agentStatus)
   }
 }
 
@@ -342,6 +344,32 @@ function previewLayout(windows, area, width, height) {
   return placed
 }
 
+// Maps window PIDs to agent states. `agents`: { session: { state, pids } }
+// where pids run from the agent up to init. The nearest ancestor that is a
+// window owns the agent, since terminals can be nested in other terminals.
+// When several agents share a window, "waiting" beats "working" beats "done".
+var AGENT_RANK = { waiting: 3, working: 2, done: 1 }
+
+function agentStates(agents, windowPids) {
+  var out = {}
+  for (var session in agents) {
+    var agent = agents[session]
+    var rank = AGENT_RANK[agent.state] || 0
+    if (!rank) continue
+    for (var i = 0; i < agent.pids.length; i++) {
+      var pid = agent.pids[i]
+      if (!windowPids[pid]) continue
+      if (!out[pid] || AGENT_RANK[out[pid]] < rank) out[pid] = agent.state
+      break
+    }
+  }
+  return out
+}
+
+function parsePids(csv) {
+  return String(csv || "").split(",").map(function(v) { return Number(v) }).filter(function(n) { return n > 1 })
+}
+
 // Next workspace id when scrolling; wraps around.
 function stepWorkspace(ids, current, delta) {
   if (!ids.length) return current
@@ -364,6 +392,7 @@ if (typeof module !== "undefined") {
   module.exports = {
     DEFAULTS: DEFAULTS, resolveSettings: resolveSettings, showsApps: showsApps,
     densityMetrics: densityMetrics, normalizeAddress: normalizeAddress,
+    agentStates: agentStates, parsePids: parsePids,
     previewWidth: previewWidth, monitorArea: monitorArea, previewLayout: previewLayout, durationFor: durationFor,
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,

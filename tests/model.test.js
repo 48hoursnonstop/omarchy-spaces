@@ -159,4 +159,20 @@ test("appIdCandidates adds the last reverse-DNS segment", () => {
   assert.deepStrictEqual(M.appIdCandidates(""), [])
 })
 
+test("agentStates picks the nearest window and the most urgent state", () => {
+  const windows = { 100: true, 200: true, 300: true }
+  const agents = {
+    a: { state: "working", pids: [5, 6, 100, 200] },
+    b: { state: "waiting", pids: [7, 100] },
+    c: { state: "done", pids: [8, 300] },
+    d: { state: "idle", pids: [9, 300] },
+    e: { state: "working", pids: [10, 11] }
+  }
+  assert.deepStrictEqual(M.agentStates(agents, windows), { 100: "waiting", 300: "done" })
+})
+
+test("parsePids drops junk and init", () => {
+  assert.deepStrictEqual(M.parsePids("12,abc,1,,34"), [12, 34])
+})
+
 if (failed) { console.log(failed + " failed"); process.exit(1) }
