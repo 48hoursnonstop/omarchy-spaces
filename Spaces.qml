@@ -386,12 +386,6 @@ Panel {
     columns: root.vertical ? 1 : Math.max(1, root.workspaceIds.length + 1)
     spacing: Style.space(root.metrics.gap)
 
-    add: Transition {
-      enabled: root.dur > 0
-      NumberAnimation { property: "opacity"; from: 0; to: 1; duration: root.dur; easing.type: Easing.OutCubic }
-      NumberAnimation { property: "scale"; from: 0.6; to: 1; duration: root.dur; easing.type: Easing.OutBack }
-    }
-
     Repeater {
       model: ScriptModel { values: root.workspaceIds }
 
@@ -508,11 +502,6 @@ Panel {
               verticalItemAlignment: Grid.AlignVCenter
               horizontalItemAlignment: Grid.AlignHCenter
 
-              add: Transition {
-                enabled: root.dur > 0
-                NumberAnimation { property: "opacity"; from: 0; to: 1; duration: root.dur; easing.type: Easing.OutCubic }
-                NumberAnimation { property: "scale"; from: 0.4; to: 1; duration: root.dur; easing.type: Easing.OutBack }
-              }
               move: Transition {
                 enabled: root.dur > 0
                 NumberAnimation { properties: "x,y"; duration: root.dur; easing.type: Easing.OutCubic }
@@ -523,6 +512,14 @@ Panel {
 
                 delegate: Item {
                   id: appIcon
+
+        // Appear animation lives on the delegate: positioner add transitions
+        // can be interrupted and leave items stuck half faded.
+        property real appear: root.dur > 0 ? 0 : 1
+        opacity: appear
+        scale: 0.6 + 0.4 * appear
+        Component.onCompleted: if (root.dur > 0) pillAppear.start()
+        NumberAnimation { id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
 
                   required property var modelData
                   readonly property var item: pill.itemMap[modelData] || null
@@ -536,8 +533,13 @@ Panel {
                   implicitHeight: Math.max(root.iconPx, iconRow.implicitHeight) + Style.space(2)
                   width: implicitWidth
                   height: implicitHeight
-                  opacity: root.cfg.dimUnfocused && pill.active && !focusedHere && !hovered ? 0.5 : 1
-                  Behavior on opacity { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
+                  property real dim: root.cfg.dimUnfocused && pill.active && !focusedHere && !hovered ? 0.5 : 1
+                  Behavior on dim { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
+                  property real appear: root.dur > 0 ? 0 : 1
+                  opacity: dim * Math.min(1, appear)
+                  scale: 0.4 + 0.6 * appear
+                  Component.onCompleted: if (root.dur > 0) iconAppear.start()
+                  NumberAnimation { id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
                   Behavior on implicitWidth { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
 
                   Rectangle {
