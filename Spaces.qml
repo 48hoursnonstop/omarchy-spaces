@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.Commons
 import qs.Ui
@@ -89,6 +90,7 @@ Panel {
     if (root.lastWorkspaceId > 0 && root.lastWorkspaceId !== root.currentWorkspaceId)
       root.previousWorkspaceId = root.lastWorkspaceId
     root.lastWorkspaceId = root.currentWorkspaceId
+    if (root.currentWorkspaceId === root.previewWorkspaceId) root.hidePreview()
   }
 
   // Addresses (normalized) of windows that requested attention and have not
@@ -137,10 +139,18 @@ Panel {
           appId: root.appIdOf(tl),
           title: String(tl.title || ""),
           focused: activeToplevel ? tl === activeToplevel : !!(tl.wayland && tl.wayland.activated),
-          at: ipc.at && ipc.at.length === 2 ? [ipc.at[0], ipc.at[1]] : null
+          at: ipc.at && ipc.at.length === 2 ? [ipc.at[0], ipc.at[1]] : null,
+          size: ipc.size && ipc.size.length === 2 ? [ipc.size[0], ipc.size[1]] : null,
+          floating: ipc.floating === true,
+          toplevel: tl.wayland
         })
       }
-      map[ws.id] = { id: ws.id, windows: Model.sortWindows(windows) }
+      var mon = ws.monitor
+      var area = mon ? Model.monitorArea({
+        x: mon.x, y: mon.y, width: mon.width, height: mon.height, scale: mon.scale,
+        reserved: mon.lastIpcObject ? mon.lastIpcObject.reserved : null
+      }) : null
+      map[ws.id] = { id: ws.id, windows: Model.sortWindows(windows), area: area }
     }
     return map
   }
@@ -256,6 +266,11 @@ Panel {
 
   function findDesktopEntry(appId) {
     if (!appId) return null
+    var candidates = Model.appIdCandidates(appId)
+    for (var c = 0; c < candidates.length; c++) {
+      var byId = DesktopEntries.byId(candidates[c])
+      if (byId) return byId
+    }
     var entry = DesktopEntries.heuristicLookup(appId)
     if (entry) return entry
 
@@ -265,11 +280,6 @@ Panel {
     for (var i = 0; i < apps.length; i++) {
       var exec = String(apps[i].execString || "")
       if (exec.indexOf("//" + host) !== -1) return apps[i]
-    }
-    var candidates = Model.appIdCandidates(appId)
-    for (var c = 0; c < candidates.length; c++) {
-      var byId = DesktopEntries.byId(candidates[c])
-      if (byId) return byId
     }
     return null
   }
@@ -349,6 +359,74 @@ Panel {
     Hyprland.refreshToplevels()
   }
 
+  // ------------------------------------------------------------ previews
+
+  // Hovering a pill of another workspace shows a live miniature of it. One
+  // card serves every pill and slides between them.
+  property int previewWorkspaceId: -1
+  property Item previewPill: null
+  property bool previewWanted: false
+  property string highlightAddress: ""
+
+  readonly property bool previewOpen: previewWanted && previewWorkspaceId > 0 && !root.opened
+    && root.cfg.previews && !!root.workspaceMap[previewWorkspaceId]
+    && root.workspaceMap[previewWorkspaceId].windows.length > 0
+
+  function pillHovered(pill, hovered) {
+    if (!root.cfg.previews) return
+    if (hovered && pill.workspaceId !== root.currentWorkspaceId && pill.occupied) {
+      previewHideTimer.stop()
+      root.previewPill = pill
+      if (root.previewOpen) {
+        // Already showing: follow the pointer right away.
+        root.previewWorkspaceId = pill.workspaceId
+        root.placePreviewAnchor(true)
+      } else {
+        previewShowTimer.restart()
+      }
+    } else if (!hovered) {
+      previewShowTimer.stop()
+      previewHideTimer.restart()
+    }
+  }
+
+  function hidePreview() {
+    previewShowTimer.stop()
+    previewHideTimer.stop()
+    root.previewWanted = false
+    root.highlightAddress = ""
+  }
+
+  function placePreviewAnchor(animate) {
+    var pill = root.previewPill
+    if (!pill) return
+    var p = pill.mapToItem(root, 0, 0)
+    previewAnchor.animate = animate
+    previewAnchor.x = p.x
+    previewAnchor.y = p.y
+    previewAnchor.width = pill.width
+    previewAnchor.height = pill.height
+  }
+
+  Timer {
+    id: previewShowTimer
+    interval: 380
+    onTriggered: {
+      if (!root.previewPill) return
+      root.previewWorkspaceId = root.previewPill.workspaceId
+      root.placePreviewAnchor(false)
+      root.previewWanted = true
+    }
+  }
+
+  Timer {
+    id: previewHideTimer
+    interval: 200
+    onTriggered: if (!preview.containsMouse) root.hidePreview()
+  }
+
+  onOpenedChanged: if (opened) hidePreview()
+
   // ------------------------------------------------------------ IPC
 
   IpcHandler {
@@ -397,7 +475,8 @@ Panel {
         readonly property var workspace: root.workspaceMap[workspaceId] || ({ id: workspaceId, windows: [] })
         readonly property bool active: workspaceId === root.currentWorkspaceId
         readonly property bool occupied: workspace.windows.length > 0
-        readonly property bool hovered: pillMouse.containsMouse
+        readonly property bool hovered: pillHover.hovered
+        onHoveredChanged: root.pillHovered(pill, hovered)
         readonly property bool showApps: Model.showsApps(root.cfg, occupied, active, hovered)
         readonly property bool urgent: {
           if (!root.cfg.urgentHighlight || active) return false
@@ -415,6 +494,14 @@ Panel {
         readonly property color textColor: active ? root.activeText() : root.fg
         readonly property string label: Model.workspaceLabel(workspaceId, active, root.cfg.labelStyle)
         readonly property real pad: Style.space(label === "" ? 3 : root.metrics.pad)
+
+        // Appear animation lives on the delegate: positioner add transitions
+        // can be interrupted and leave items stuck half faded.
+        property real appear: root.dur > 0 ? 0 : 1
+        opacity: appear
+        scale: 0.6 + 0.4 * appear
+        Component.onCompleted: if (root.dur > 0) pillAppear.start()
+        NumberAnimation { id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
 
         width: implicitWidth
         height: implicitHeight
@@ -451,13 +538,18 @@ Panel {
           Behavior on color { enabled: root.fastDur > 0; ColorAnimation { duration: root.fastDur } }
         }
 
+        HoverHandler { id: pillHover }
+
         MouseArea {
           id: pillMouse
           anchors.fill: parent
           hoverEnabled: true
           acceptedButtons: Qt.LeftButton
           cursorShape: Qt.PointingHandCursor
-          onClicked: root.clickWorkspace(pill.workspaceId)
+          onClicked: {
+            root.hidePreview()
+            root.clickWorkspace(pill.workspaceId)
+          }
           onWheel: function(wheel) { root.scrollBy(wheel.angleDelta.y || wheel.angleDelta.x) }
         }
 
@@ -512,14 +604,6 @@ Panel {
 
                 delegate: Item {
                   id: appIcon
-
-        // Appear animation lives on the delegate: positioner add transitions
-        // can be interrupted and leave items stuck half faded.
-        property real appear: root.dur > 0 ? 0 : 1
-        opacity: appear
-        scale: 0.6 + 0.4 * appear
-        Component.onCompleted: if (root.dur > 0) pillAppear.start()
-        NumberAnimation { id: pillAppear; target: pill; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
 
                   required property var modelData
                   readonly property var item: pill.itemMap[modelData] || null
@@ -653,10 +737,11 @@ Panel {
                     }
                     onWheel: function(wheel) { root.scrollBy(wheel.angleDelta.y || wheel.angleDelta.x) }
                     onContainsMouseChanged: {
+                      root.highlightAddress = containsMouse && appIcon.item ? appIcon.item.address : ""
                       if (containsMouse && appIcon.item) {
                         var tip = appIcon.item.title || appIcon.info.name
                         if (appIcon.item.count > 1) tip = appIcon.info.name + " (" + appIcon.item.count + " windows)"
-                        root.showTip(appIcon, tip)
+                        if (!root.previewOpen) root.showTip(appIcon, tip)
                       } else {
                         root.hideTip(appIcon)
                       }
@@ -725,6 +810,258 @@ Panel {
         cursorShape: Qt.PointingHandCursor
         onClicked: root.toggle()
         onContainsMouseChanged: containsMouse ? root.showTip(gear, "Spaces settings") : root.hideTip(gear)
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ preview card
+
+  // Invisible stand-in for the hovered pill. The card anchors to it, so
+  // animating it slides the card from pill to pill.
+  Item {
+    id: previewAnchor
+    property bool animate: false
+    visible: false
+
+    Behavior on x { enabled: previewAnchor.animate && root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+    Behavior on y { enabled: previewAnchor.animate && root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+    onXChanged: if (preview.visible) preview.anchor.updateAnchor()
+    onYChanged: if (preview.visible) preview.anchor.updateAnchor()
+  }
+
+  // Popup coordination stays out of it: a hover preview must never close
+  // another widget's open panel.
+  QtObject {
+    id: previewBar
+    readonly property string position: root.bar ? root.bar.position : "top"
+    property var activePopout: null
+    function requestPopout(owner) {}
+    function releasePopout(owner) {}
+  }
+
+  PopupCard {
+    id: preview
+    anchorItem: previewAnchor
+    bar: previewBar
+    triggerMode: "hover"
+    open: root.previewOpen
+
+    readonly property var workspace: root.workspaceMap[root.previewWorkspaceId] || null
+    readonly property var area: workspace ? workspace.area : null
+    readonly property real mapWidth: Style.space(Model.previewWidth(root.cfg.previewSize))
+    readonly property real mapHeight: area ? Math.round(mapWidth * area.height / area.width) : Math.round(mapWidth * 9 / 16)
+
+    contentWidth: preview.fittedContentWidth(mapWidth + padding * 2 + Style.space(4))
+    contentHeight: preview.fittedContentHeight(previewColumn.implicitHeight)
+
+    onContainsMouseChanged: {
+      if (containsMouse) previewHideTimer.stop()
+      else previewHideTimer.restart()
+    }
+
+    // Popups get no compositor blur, so the card needs its own opaque fill.
+    Rectangle {
+      anchors.fill: parent
+      anchors.margins: -Math.max(0, preview.padding - Style.space(2))
+      radius: Math.max(0, Style.cornerRadius - Style.space(2))
+      color: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.97)
+    }
+
+    Column {
+      id: previewColumn
+      anchors.horizontalCenter: parent.horizontalCenter
+      spacing: Style.space(8)
+      scale: preview.open ? 1 : 0.96
+      transformOrigin: previewBar.position === "bottom" ? Item.Bottom : Item.Top
+      Behavior on scale { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+
+      Item {
+        width: preview.mapWidth
+        implicitHeight: Math.max(previewTitle.implicitHeight, previewCount.implicitHeight)
+
+        Text {
+          id: previewTitle
+          anchors.left: parent.left
+          anchors.verticalCenter: parent.verticalCenter
+          text: "Workspace " + (root.previewWorkspaceId === 10 ? "0" : root.previewWorkspaceId)
+          color: root.fg
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          font.bold: true
+        }
+
+        Text {
+          id: previewCount
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          readonly property int count: preview.workspace ? preview.workspace.windows.length : 0
+          text: count + (count === 1 ? " WINDOW" : " WINDOWS")
+          color: Qt.darker(root.fg, 1.4)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+          font.letterSpacing: 1.2
+        }
+      }
+
+      // The miniature. Rebuilt per workspace so switching pills crossfades.
+      Item {
+        id: miniature
+        width: preview.mapWidth
+        height: preview.mapHeight
+
+        Rectangle {
+          anchors.fill: parent
+          radius: Style.cornerRadius > 0 ? Style.space(6) : 0
+          color: Util.alpha(root.fg, 0.05)
+          border.width: 1
+          border.color: Util.alpha(root.fg, 0.08)
+        }
+
+        Loader {
+          id: miniatureLoader
+          anchors.fill: parent
+          active: preview.visible && preview.workspace !== null
+          sourceComponent: miniatureComponent
+        }
+
+        Connections {
+          target: root
+          function onPreviewWorkspaceIdChanged() {
+            if (!preview.visible || root.dur === 0) return
+            swapAnimation.restart()
+          }
+        }
+
+        ParallelAnimation {
+          id: swapAnimation
+          NumberAnimation { target: miniatureLoader; property: "opacity"; from: 0.35; to: 1; duration: root.dur; easing.type: Easing.OutCubic }
+          NumberAnimation { target: miniatureLoader; property: "scale"; from: 0.97; to: 1; duration: root.dur; easing.type: Easing.OutCubic }
+        }
+      }
+
+      Text {
+        id: previewFooter
+        width: preview.mapWidth
+        readonly property var hovered: root.windowByAddress(root.highlightAddress)
+        text: hovered ? hovered.title : "Click a window to jump to it"
+        color: root.fg
+        opacity: hovered ? 0.9 : 0.5
+        elide: Text.ElideRight
+        horizontalAlignment: Text.AlignHCenter
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+    }
+  }
+
+  function windowByAddress(address) {
+    if (!address || !preview.workspace) return null
+    var windows = preview.workspace.windows
+    for (var i = 0; i < windows.length; i++) if (windows[i].address === address) return windows[i]
+    return null
+  }
+
+  Component {
+    id: miniatureComponent
+
+    Item {
+      id: mini
+      readonly property var workspace: preview.workspace
+      readonly property var layout: workspace
+        ? Model.previewLayout(workspace.windows, workspace.area, width, height) : []
+      readonly property var rects: {
+        var map = ({})
+        for (var i = 0; i < layout.length; i++) map[layout[i].address] = layout[i]
+        return map
+      }
+
+      Repeater {
+        model: ScriptModel { values: mini.layout.map(function(r) { return r.address }) }
+
+        delegate: Item {
+          id: thumb
+          required property var modelData
+          readonly property var rect: mini.rects[modelData] || null
+          readonly property var win: root.windowByAddress(modelData)
+          readonly property bool highlighted: root.highlightAddress === modelData || thumbMouse.containsMouse
+          readonly property real inset: Style.space(2)
+
+          x: rect ? rect.x + inset : 0
+          y: rect ? rect.y + inset : 0
+          width: rect ? Math.max(2, rect.width - inset * 2) : 0
+          height: rect ? Math.max(2, rect.height - inset * 2) : 0
+          z: rect && rect.floating ? 1 : 0
+
+          Behavior on x { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+          Behavior on y { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+          Behavior on width { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+          Behavior on height { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
+
+          ScreencopyView {
+            id: capture
+            anchors.fill: parent
+            captureSource: thumb.win ? thumb.win.toplevel : null
+            live: root.cfg.previewLive
+            constraintSize: Qt.size(Math.round(thumb.width * 2), Math.round(thumb.height * 2))
+            opacity: hasContent ? 1 : 0
+            Behavior on opacity { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
+          }
+
+          // Placeholder until the first frame arrives.
+          Rectangle {
+            anchors.fill: parent
+            visible: !capture.hasContent
+            color: Util.alpha(root.fg, 0.08)
+          }
+
+          Rectangle {
+            anchors.fill: parent
+            color: "transparent"
+            border.width: thumb.highlighted ? 2 : 1
+            border.color: thumb.highlighted ? Color.accent : Util.alpha(root.fg, 0.18)
+            Behavior on border.color { enabled: root.fastDur > 0; ColorAnimation { duration: root.fastDur } }
+          }
+
+          // App badge in the corner, so small thumbnails stay identifiable.
+          Rectangle {
+            readonly property var info: thumb.win ? root.appInfo(thumb.win.appId) : null
+            visible: info !== null && thumb.width > 28 && thumb.height > 22
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
+            anchors.margins: Style.space(4)
+            width: Style.space(20)
+            height: width
+            radius: Style.cornerRadius > 0 ? Style.space(5) : 0
+            color: Util.alpha(root.bg, 0.85)
+
+            Image {
+              anchors.centerIn: parent
+              width: Style.space(14)
+              height: width
+              source: parent.info ? parent.info.source : ""
+              sourceSize.width: width * 2
+              sourceSize.height: height * 2
+              fillMode: Image.PreserveAspectFit
+              asynchronous: true
+            }
+          }
+
+          MouseArea {
+            id: thumbMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onContainsMouseChanged: {
+              if (containsMouse) root.highlightAddress = thumb.modelData
+              else if (root.highlightAddress === thumb.modelData) root.highlightAddress = ""
+            }
+            onClicked: {
+              root.focusWindow(thumb.modelData)
+              root.hidePreview()
+            }
+          }
+        }
       }
     }
   }
@@ -818,6 +1155,35 @@ Panel {
           ToggleSetting { visible: root.cfg.showIcons; label: "Group windows by app"; description: "One icon per app with a window count"; key: "groupApps" }
           ToggleSetting { visible: root.cfg.showIcons; label: "Dim unfocused windows"; description: "On the active workspace"; key: "dimUnfocused" }
           ToggleSetting { visible: root.cfg.showIcons; label: "Show focused window title"; description: "Next to its icon"; key: "focusedTitle" }
+
+          PanelSeparator { foreground: root.fg }
+
+          // ---- Previews
+          SectionTitle { text: "PREVIEWS" }
+
+          ToggleSetting {
+            label: "Workspace previews"
+            description: "Hover another workspace to see a live miniature of it"
+            key: "previews"
+          }
+
+          ChoiceSetting {
+            visible: root.cfg.previews
+            title: "PREVIEW SIZE"
+            key: "previewSize"
+            options: [
+              { value: "small", label: "Small" },
+              { value: "medium", label: "Medium" },
+              { value: "large", label: "Large" }
+            ]
+          }
+
+          ToggleSetting {
+            visible: root.cfg.previews
+            label: "Live video"
+            description: "Off shows a still frame and saves power"
+            key: "previewLive"
+          }
 
           PanelSeparator { foreground: root.fg }
 

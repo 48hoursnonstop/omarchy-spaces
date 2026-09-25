@@ -203,6 +203,29 @@
           "never"
         ],
         "default": "hover"
+      },
+      {
+        "key": "previews",
+        "type": "bool",
+        "label": "Workspace previews",
+        "default": true
+      },
+      {
+        "key": "previewSize",
+        "type": "enum",
+        "label": "Preview size",
+        "options": [
+          "small",
+          "medium",
+          "large"
+        ],
+        "default": "medium"
+      },
+      {
+        "key": "previewLive",
+        "type": "bool",
+        "label": "Live video in previews",
+        "default": true
       }
     ]
   }
