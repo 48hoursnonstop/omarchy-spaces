@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Agent status: terminals running Claude Code show a spinner while the agent
+  works, a pulsing `!` when it needs input, and a check mark when it is done.
+  Workspaces with a waiting agent pulse
+- `hooks/claude-hook` reports agent state; see the README for setup
+- Setting to turn agent status off
+
 ## 0.2.0
 
 - Live workspace previews: hover another workspace to see a miniature of it,
