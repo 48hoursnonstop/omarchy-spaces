@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0
+
+- Live workspace previews: hover another workspace to see a miniature of it,
+  with each window where it really is. Click a window to jump to it
+- The preview slides between workspaces as you move along the bar
+- Hovering an app icon highlights its window in the preview
+- `peek` command to open a preview from a keybinding:
+  `omarchy-shell insanearts.spaces peek 3`
+- Settings: turn previews on or off, preview size, live video or still frame
+- Icons for apps with reverse-DNS ids, such as `dev.example.tool`
+- Fix: workspaces could stay half faded after appearing
+
 ## 0.1.0
 
 First release.
