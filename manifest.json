@@ -1,0 +1,209 @@
+{
+  "schemaVersion": 1,
+  "id": "insanearts.spaces",
+  "name": "Spaces",
+  "version": "0.1.0",
+  "author": "Tornike Gomareli",
+  "description": "Workspace switcher that shows the apps open on each workspace",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Spaces.qml"
+  },
+  "barWidget": {
+    "displayName": "Spaces",
+    "description": "Workspace switcher that shows the apps open on each workspace",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "left",
+    "defaults": {},
+    "schema": [
+      {
+        "key": "showIcons",
+        "type": "bool",
+        "label": "Show app icons",
+        "default": true
+      },
+      {
+        "key": "showApps",
+        "type": "enum",
+        "label": "Show icons on",
+        "options": [
+          "all",
+          "active",
+          "hover",
+          "hoverOnly"
+        ],
+        "default": "hover"
+      },
+      {
+        "key": "iconStyle",
+        "type": "enum",
+        "label": "Icon style",
+        "options": [
+          "color",
+          "mono"
+        ],
+        "default": "color"
+      },
+      {
+        "key": "activeStyle",
+        "type": "enum",
+        "label": "Active workspace style",
+        "options": [
+          "subtle",
+          "solid",
+          "accent"
+        ],
+        "default": "subtle"
+      },
+      {
+        "key": "labelStyle",
+        "type": "enum",
+        "label": "Workspace label",
+        "options": [
+          "number",
+          "glyph",
+          "none"
+        ],
+        "default": "number"
+      },
+      {
+        "key": "iconSize",
+        "type": "int",
+        "label": "Icon size",
+        "min": 12,
+        "max": 24,
+        "default": 16
+      },
+      {
+        "key": "maxIcons",
+        "type": "int",
+        "label": "Max icons per workspace",
+        "min": 1,
+        "max": 20,
+        "default": 8
+      },
+      {
+        "key": "persistentWorkspaces",
+        "type": "int",
+        "label": "Always show workspaces",
+        "min": 0,
+        "max": 10,
+        "default": 5
+      },
+      {
+        "key": "groupApps",
+        "type": "bool",
+        "label": "Group windows by app",
+        "default": false
+      },
+      {
+        "key": "dimUnfocused",
+        "type": "bool",
+        "label": "Dim unfocused windows",
+        "default": true
+      },
+      {
+        "key": "focusedTitle",
+        "type": "bool",
+        "label": "Show focused window title",
+        "default": false
+      },
+      {
+        "key": "titleLength",
+        "type": "int",
+        "label": "Title length",
+        "min": 8,
+        "max": 60,
+        "default": 24
+      },
+      {
+        "key": "hideEmpty",
+        "type": "bool",
+        "label": "Hide empty workspaces",
+        "default": false
+      },
+      {
+        "key": "perMonitor",
+        "type": "bool",
+        "label": "Only this monitor's workspaces",
+        "default": false
+      },
+      {
+        "key": "scrollSwitch",
+        "type": "bool",
+        "label": "Scroll to switch workspaces",
+        "default": true
+      },
+      {
+        "key": "animations",
+        "type": "bool",
+        "label": "Animations",
+        "default": true
+      },
+      {
+        "key": "animationSpeed",
+        "type": "enum",
+        "label": "Animation speed",
+        "options": [
+          "slow",
+          "normal",
+          "fast"
+        ],
+        "default": "normal"
+      },
+      {
+        "key": "middleClickClose",
+        "type": "bool",
+        "label": "Middle-click icon closes window",
+        "default": false
+      },
+      {
+        "key": "activeClick",
+        "type": "enum",
+        "label": "Clicking the active workspace",
+        "options": [
+          "none",
+          "previous"
+        ],
+        "default": "none"
+      },
+      {
+        "key": "urgentHighlight",
+        "type": "bool",
+        "label": "Highlight urgent windows",
+        "default": true
+      },
+      {
+        "key": "tooltips",
+        "type": "bool",
+        "label": "Tooltips",
+        "default": true
+      },
+      {
+        "key": "density",
+        "type": "enum",
+        "label": "Density",
+        "options": [
+          "compact",
+          "normal",
+          "roomy"
+        ],
+        "default": "normal"
+      },
+      {
+        "key": "settingsButton",
+        "type": "enum",
+        "label": "Settings button",
+        "options": [
+          "hover",
+          "always",
+          "never"
+        ],
+        "default": "hover"
+      }
+    ]
+  }
+}
