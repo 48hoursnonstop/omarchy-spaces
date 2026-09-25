@@ -31,6 +31,26 @@ Requires Omarchy with the Quickshell bar and Hyprland.
 - Hover another workspace to preview it. Click a window in the preview to focus it.
 - Right-click the widget, or click the gear that shows on hover, to open settings.
 
+## Agent status
+
+Terminals running Claude Code get a badge: a spinner while the agent works, a pulsing `!` when it needs your input, and a check mark when it is done. A workspace with an agent waiting on you pulses too.
+
+Add these hooks to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook working", "async": true }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook working", "async": true }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook waiting", "async": true }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook done", "async": true }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook end", "async": true }] }]
+  }
+}
+```
+
+Other agents can report the same way: `omarchy-shell insanearts.spaces agent <session> <working|waiting|done|end> <pids>`, where `<pids>` lists the agent's process and its parents, comma-separated.
+
 ## Settings
 
 <img src=".github/assets/settings.png" width="330" align="right" alt="Spaces settings panel" />
