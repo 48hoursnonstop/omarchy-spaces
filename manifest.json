@@ -226,6 +226,12 @@
         "type": "bool",
         "label": "Live video in previews",
         "default": true
+      },
+      {
+        "key": "agentStatus",
+        "type": "bool",
+        "label": "Agent status",
+        "default": true
       }
     ]
   }

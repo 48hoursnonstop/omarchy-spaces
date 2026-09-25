@@ -110,6 +110,85 @@ Panel {
     return root.cfg.urgentHighlight && !!root.urgentAddresses[Model.normalizeAddress(address)]
   }
 
+  // ------------------------------------------------------------ agents
+
+  // Coding agents report in through hooks/claude-hook:
+  //   { [session]: { state: "working" | "waiting" | "done" | "idle", pids: [...] } }
+  property var agents: ({})
+
+  readonly property var pidByAddress: {
+    var map = ({})
+    for (var id in root.workspaceMap) {
+      var windows = root.workspaceMap[id].windows
+      for (var i = 0; i < windows.length; i++) map[windows[i].address] = windows[i].pid
+    }
+    return map
+  }
+
+  readonly property var agentByPid: {
+    if (!root.cfg.agentStatus) return ({})
+    var pids = ({})
+    for (var address in root.pidByAddress) if (root.pidByAddress[address]) pids[root.pidByAddress[address]] = true
+    return Model.agentStates(root.agents, pids)
+  }
+
+  function agentStateFor(addresses) {
+    var best = ""
+    var rank = { waiting: 3, working: 2, done: 1 }
+    for (var i = 0; i < addresses.length; i++) {
+      var state = root.agentByPid[root.pidByAddress[addresses[i]]] || ""
+      if (state && (!best || rank[state] > rank[best])) best = state
+    }
+    return best
+  }
+
+  // PID of the window that owns an agent: its nearest ancestor window.
+  function agentWindowPid(agent) {
+    var windowPids = ({})
+    for (var address in root.pidByAddress) windowPids[root.pidByAddress[address]] = true
+    for (var i = 0; i < agent.pids.length; i++) if (windowPids[agent.pids[i]]) return agent.pids[i]
+    return 0
+  }
+
+  function activeWindowPid() {
+    var active = Hyprland.activeToplevel
+    return active ? (root.pidByAddress[String(active.address)] || 0) : 0
+  }
+
+  function applyAgent(session, state, pidsCsv) {
+    var next = ({})
+    for (var k in root.agents) if (k !== session) next[k] = root.agents[k]
+    if (state !== "end") {
+      var agent = { state: state, pids: Model.parsePids(pidsCsv) }
+      // Finishing in the window you are looking at needs no check mark.
+      if (state === "done" && root.agentWindowPid(agent) === root.activeWindowPid()) agent.state = "idle"
+      next[session] = agent
+    }
+    root.agents = next
+  }
+
+  // Seeing a finished agent's window clears its check mark.
+  function acknowledgeAgents() {
+    var pid = root.activeWindowPid()
+    if (!pid) return
+    var changed = false
+    var next = ({})
+    for (var k in root.agents) {
+      var agent = root.agents[k]
+      if (agent.state === "done" && root.agentWindowPid(agent) === pid) {
+        agent = { state: "idle", pids: agent.pids }
+        changed = true
+      }
+      next[k] = agent
+    }
+    if (changed) root.agents = next
+  }
+
+  Connections {
+    target: Hyprland
+    function onActiveToplevelChanged() { Qt.callLater(root.acknowledgeAgents) }
+  }
+
   function appIdOf(toplevel) {
     if (toplevel.wayland && toplevel.wayland.appId) return toplevel.wayland.appId
     var ipc = toplevel.lastIpcObject
@@ -142,6 +221,7 @@ Panel {
           at: ipc.at && ipc.at.length === 2 ? [ipc.at[0], ipc.at[1]] : null,
           size: ipc.size && ipc.size.length === 2 ? [ipc.size[0], ipc.size[1]] : null,
           floating: ipc.floating === true,
+          pid: ipc.pid || 0,
           toplevel: tl.wayland
         })
       }
@@ -459,6 +539,12 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function peek(workspace: string): string { return root.peek(workspace) ? "ok" : "empty" }
+    function agent(session: string, state: string, pids: string): void {
+      // One IPC handler serves every monitor's bar, so relay to all of them.
+      var items = root.bar && typeof root.bar.moduleWidgets === "function" ? root.bar.moduleWidgets(root.moduleName) : [root]
+      if (items.indexOf(root) === -1) items = items.concat([root])
+      for (var i = 0; i < items.length; i++) if (items[i] && typeof items[i].applyAgent === "function") items[i].applyAgent(session, state, pids)
+    }
   }
 
   // ------------------------------------------------------------ bar widget
@@ -502,7 +588,9 @@ Panel {
         onHoveredChanged: root.pillHovered(pill, hovered)
         readonly property bool showApps: Model.showsApps(root.cfg, occupied, active, hovered)
         readonly property bool urgent: {
-          if (!root.cfg.urgentHighlight || active) return false
+          if (active) return false
+          if (root.agentStateFor(workspace.windows.map(function(w) { return w.address })) === "waiting") return true
+          if (!root.cfg.urgentHighlight) return false
           for (var i = 0; i < workspace.windows.length; i++)
             if (root.isUrgent(workspace.windows[i].address)) return true
           return false
@@ -635,15 +723,16 @@ Panel {
                   readonly property string titleText: root.cfg.focusedTitle && focusedHere && !root.vertical
                     ? Model.focusedLabel(item, info.name, root.cfg.titleLength) : ""
                   readonly property bool hovered: iconMouse.containsMouse
+                  readonly property string agentState: item ? root.agentStateFor(item.addresses) : ""
 
                   implicitWidth: iconRow.implicitWidth + Style.space(4)
-                  implicitHeight: Math.max(root.iconPx, iconRow.implicitHeight) + Style.space(2)
+                  implicitHeight: Math.max(root.iconPx, iconRow.implicitHeight) + Style.space(4)
                   width: implicitWidth
                   height: implicitHeight
                   property real dim: root.cfg.dimUnfocused && pill.active && !focusedHere && !hovered ? 0.5 : 1
                   Behavior on dim { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
                   property real appear: root.dur > 0 ? 0 : 1
-                  opacity: dim * Math.min(1, appear)
+                  opacity: Math.min(1, appear)
                   scale: 0.4 + 0.6 * appear
                   Component.onCompleted: if (root.dur > 0) iconAppear.start()
                   NumberAnimation { id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
@@ -678,6 +767,7 @@ Panel {
                         mipmap: true
                         asynchronous: true
                         visible: status === Image.Ready
+                        opacity: appIcon.dim
                         layer.enabled: root.cfg.iconStyle === "mono"
                         layer.effect: MultiEffect { saturation: -1.0 }
                       }
@@ -686,6 +776,7 @@ Panel {
                       Rectangle {
                         anchors.fill: parent
                         visible: iconImage.status !== Image.Ready
+                        opacity: appIcon.dim
                         radius: Style.cornerRadius > 0 ? width * 0.25 : 0
                         color: Util.alpha(pill.textColor, 0.2)
                         Text {
@@ -700,7 +791,7 @@ Panel {
 
                       // Attention dot for windows that asked to be looked at.
                       Rectangle {
-                        visible: appIcon.item !== null && appIcon.item.addresses.some(function(a) { return root.isUrgent(a) })
+                        visible: appIcon.agentState === "" && appIcon.item !== null && appIcon.item.addresses.some(function(a) { return root.isUrgent(a) })
                         anchors.right: parent.right
                         anchors.top: parent.top
                         anchors.rightMargin: -Style.space(2)
@@ -711,6 +802,73 @@ Panel {
                         color: root.bar ? root.bar.urgent : Color.urgent
                         border.width: 1
                         border.color: root.bg
+                      }
+
+                      // Agent badge: spinner while working, pulse when it
+                      // needs input, check mark when done.
+                      Item {
+                        id: agentBadge
+                        visible: appIcon.agentState !== "" && appIcon.agentState !== "idle"
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.rightMargin: -Style.space(3)
+                        anchors.topMargin: -Style.space(2)
+                        width: Math.max(8, Math.round(root.iconPx * 0.6))
+                        height: width
+
+                        Rectangle {
+                          anchors.fill: parent
+                          radius: width / 2
+                          color: appIcon.agentState === "done" ? Color.accent
+                            : appIcon.agentState === "waiting" ? (root.bar ? root.bar.urgent : Color.urgent)
+                            : root.bg
+                        }
+
+                        Canvas {
+                          id: spinner
+                          anchors.fill: parent
+                          anchors.margins: 1.5
+                          visible: appIcon.agentState === "working"
+                          onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.lineWidth = Math.max(1.5, width * 0.18)
+                            ctx.lineCap = "round"
+                            ctx.strokeStyle = root.fg
+                            ctx.beginPath()
+                            ctx.arc(width / 2, height / 2, width / 2 - ctx.lineWidth / 2, 0, Math.PI * 1.4)
+                            ctx.stroke()
+                          }
+                          Connections {
+                            target: root
+                            function onFgChanged() { spinner.requestPaint() }
+                          }
+                          RotationAnimator on rotation {
+                            running: spinner.visible
+                            from: 0
+                            to: 360
+                            duration: 900
+                            loops: Animation.Infinite
+                          }
+                        }
+
+                        Text {
+                          anchors.centerIn: parent
+                          visible: appIcon.agentState === "done" || appIcon.agentState === "waiting"
+                          text: appIcon.agentState === "done" ? "\uf00c" : "!"
+                          color: root.bg
+                          font.family: root.fontFamily
+                          font.pixelSize: Math.round(parent.width * 0.62)
+                          font.bold: true
+                        }
+
+                        SequentialAnimation on scale {
+                          running: appIcon.agentState === "waiting"
+                          loops: Animation.Infinite
+                          alwaysRunToEnd: true
+                          NumberAnimation { from: 1; to: 1.3; duration: 520; easing.type: Easing.InOutSine }
+                          NumberAnimation { from: 1.3; to: 1; duration: 520; easing.type: Easing.InOutSine }
+                        }
                       }
 
                       // Window count for grouped apps.
@@ -738,6 +896,7 @@ Panel {
 
                     Text {
                       visible: appIcon.titleText !== ""
+                      opacity: appIcon.dim
                       anchors.verticalCenter: parent.verticalCenter
                       text: appIcon.titleText
                       color: pill.textColor
@@ -764,6 +923,8 @@ Panel {
                       if (containsMouse && appIcon.item) {
                         var tip = appIcon.item.title || appIcon.info.name
                         if (appIcon.item.count > 1) tip = appIcon.info.name + " (" + appIcon.item.count + " windows)"
+                        var agentText = { working: "Agent working", waiting: "Agent needs your input", done: "Agent finished" }[appIcon.agentState]
+                        if (agentText) tip = agentText + " \u00b7 " + tip
                         if (!root.previewOpen) root.showTip(appIcon, tip)
                       } else {
                         root.hideTip(appIcon)
@@ -1178,6 +1339,7 @@ Panel {
           ToggleSetting { visible: root.cfg.showIcons; label: "Group windows by app"; description: "One icon per app with a window count"; key: "groupApps" }
           ToggleSetting { visible: root.cfg.showIcons; label: "Dim unfocused windows"; description: "On the active workspace"; key: "dimUnfocused" }
           ToggleSetting { visible: root.cfg.showIcons; label: "Show focused window title"; description: "Next to its icon"; key: "focusedTitle" }
+          ToggleSetting { visible: root.cfg.showIcons; label: "Agent status"; description: "Badges on terminals running coding agents"; key: "agentStatus" }
 
           PanelSeparator { foreground: root.fg }
 
