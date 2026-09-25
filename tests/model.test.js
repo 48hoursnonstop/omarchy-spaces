@@ -153,4 +153,10 @@ test("preview settings validate", () => {
   assert.strictEqual(M.previewWidth("large"), 520)
 })
 
+test("appIdCandidates adds the last reverse-DNS segment", () => {
+  assert.deepStrictEqual(M.appIdCandidates("dev.tgomareli.logi-kvm-console"), ["dev.tgomareli.logi-kvm-console", "logi-kvm-console"])
+  assert.deepStrictEqual(M.appIdCandidates("Slack"), ["Slack", "slack"])
+  assert.deepStrictEqual(M.appIdCandidates(""), [])
+})
+
 if (failed) { console.log(failed + " failed"); process.exit(1) }

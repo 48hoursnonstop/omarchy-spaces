@@ -228,6 +228,22 @@ function focusedLabel(item, appName, maxLength) {
   return truncate(text, maxLength)
 }
 
+// Lookup keys for an app id, most specific first. Reverse-DNS ids such as
+// "dev.example.my-tool" often ship a desktop file named after the last part.
+function appIdCandidates(appId) {
+  var id = String(appId || "")
+  if (id === "") return []
+  var out = [id]
+  function add(v) { if (v && out.indexOf(v) === -1) out.push(v) }
+  add(id.toLowerCase())
+  var dot = id.lastIndexOf(".")
+  if (dot > 0 && dot < id.length - 1) {
+    add(id.slice(dot + 1))
+    add(id.slice(dot + 1).toLowerCase())
+  }
+  return out
+}
+
 // Chromium-family --app windows use classes like
 // "chrome-web.whatsapp.com__-Default" or "brave-app.hey.com__-Profile_1".
 // Returns the host ("web.whatsapp.com") or "" when the class is not one.
@@ -351,7 +367,7 @@ if (typeof module !== "undefined") {
     previewWidth: previewWidth, monitorArea: monitorArea, previewLayout: previewLayout, durationFor: durationFor,
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
-    focusedLabel: focusedLabel, webAppHost: webAppHost, iconPathScore: iconPathScore,
+    focusedLabel: focusedLabel, webAppHost: webAppHost, appIdCandidates: appIdCandidates, iconPathScore: iconPathScore,
     iconNameFromPath: iconNameFromPath, stepWorkspace: stepWorkspace, mergedEntry: mergedEntry
   }
 }

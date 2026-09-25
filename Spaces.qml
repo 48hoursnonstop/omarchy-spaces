@@ -266,6 +266,11 @@ Panel {
       var exec = String(apps[i].execString || "")
       if (exec.indexOf("//" + host) !== -1) return apps[i]
     }
+    var candidates = Model.appIdCandidates(appId)
+    for (var c = 0; c < candidates.length; c++) {
+      var byId = DesktopEntries.byId(candidates[c])
+      if (byId) return byId
+    }
     return null
   }
 
