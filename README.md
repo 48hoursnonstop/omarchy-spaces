@@ -53,7 +53,7 @@ Requirements:
 - `jq` for the agent hook (installed with Omarchy)
 - Claude Code, only for agent status
 
-Tested with a top bar on a single monitor.
+Works with the bar on any edge of the screen. Tested on a single monitor.
 
 To update, then load the new code:
 
