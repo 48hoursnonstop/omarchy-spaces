@@ -107,11 +107,12 @@ omarchy bar set tornikegomareli.spaces showApps all
 
 ## Development
 
+From a clone of this repository, link it into Omarchy and run the tests:
+
 ```sh
-git clone https://github.com/tornikegomareli/omarchy-spaces.git
-ln -sfn "$PWD/omarchy-spaces" ~/.config/omarchy/plugins/tornikegomareli.spaces
+ln -sfn "$PWD" ~/.config/omarchy/plugins/tornikegomareli.spaces
 omarchy plugin enable tornikegomareli.spaces
-node omarchy-spaces/tests/model.test.js
+node tests/model.test.js
 ```
 
 After code changes, run `omarchy restart shell`.
