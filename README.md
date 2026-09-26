@@ -29,16 +29,16 @@ To turn it on, add these hooks to `~/.claude/settings.json`:
 ```json
 {
   "hooks": {
-    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook working", "async": true }] }],
-    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook working", "async": true }] }],
-    "Notification": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook waiting", "async": true }] }],
-    "Stop": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook done", "async": true }] }],
-    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/insanearts.spaces/hooks/claude-hook end", "async": true }] }]
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook working", "async": true }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook working", "async": true }] }],
+    "Notification": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook waiting", "async": true }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook done", "async": true }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "~/.config/omarchy/plugins/tornikegomareli.spaces/hooks/claude-hook end", "async": true }] }]
   }
 }
 ```
 
-Other agents can report the same way: `omarchy-shell insanearts.spaces agent <session> <working|waiting|done|end> <pids>`, where `<pids>` lists the agent's process and its parents, comma-separated.
+Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agent <session> <working|waiting|done|end> <pids>`, where `<pids>` lists the agent's process and its parents, comma-separated.
 
 ## Install
 
@@ -58,14 +58,14 @@ Tested with a top bar on a single monitor.
 To update, then load the new code:
 
 ```sh
-omarchy plugin update insanearts.spaces
+omarchy plugin update tornikegomareli.spaces
 omarchy restart shell
 ```
 
 ## Remove
 
 ```sh
-omarchy plugin remove insanearts.spaces
+omarchy plugin remove tornikegomareli.spaces
 omarchy plugin enable omarchy.workspaces   # bring back the built-in switcher
 ```
 
@@ -88,19 +88,19 @@ Choose when icons show (always, active, on hover, or never), icon style and size
 To open settings with a key, add this to `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + CTRL + ALT + S", "Spaces settings", "omarchy-shell insanearts.spaces toggle")
+o.bind("SUPER + CTRL + ALT + S", "Spaces settings", "omarchy-shell tornikegomareli.spaces toggle")
 ```
 
 To preview a workspace from a key or script, without hovering:
 
 ```sh
-omarchy-shell insanearts.spaces peek 3
+omarchy-shell tornikegomareli.spaces peek 3
 ```
 
 Settings can also be set from a script:
 
 ```sh
-omarchy bar set insanearts.spaces showApps all
+omarchy bar set tornikegomareli.spaces showApps all
 ```
 
 <br clear="right" />
@@ -109,8 +109,8 @@ omarchy bar set insanearts.spaces showApps all
 
 ```sh
 git clone https://github.com/tornikegomareli/omarchy-spaces.git
-ln -sfn "$PWD/omarchy-spaces" ~/.config/omarchy/plugins/insanearts.spaces
-omarchy plugin enable insanearts.spaces
+ln -sfn "$PWD/omarchy-spaces" ~/.config/omarchy/plugins/tornikegomareli.spaces
+omarchy plugin enable tornikegomareli.spaces
 node omarchy-spaces/tests/model.test.js
 ```
 

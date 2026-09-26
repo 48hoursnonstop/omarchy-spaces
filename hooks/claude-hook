@@ -16,5 +16,5 @@ while [[ $pid -gt 1 && -r /proc/$pid/stat ]]; do
   pid=$(cut -d' ' -f2 <<<"$stat")
 done
 
-omarchy-shell insanearts.spaces agent "$session" "$state" "$pids" >/dev/null 2>&1 &
+omarchy-shell tornikegomareli.spaces agent "$session" "$state" "$pids" >/dev/null 2>&1 &
 exit 0

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The plugin ID is now `tornikegomareli.spaces`, matching the repository owner.
+  If you installed an earlier version, remove `insanearts.spaces`, add the plugin
+  again, and update the hook paths in `~/.claude/settings.json`.
+
 ## 0.3.0
 
 - Agent status: terminals running Claude Code show a spinner while the agent
