@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
+
+First stable release, ready for the Omarchy plugin marketplace.
 
 - The plugin ID is now `tornikegomareli.spaces`, matching the repository owner.
   If you installed an earlier version, remove `insanearts.spaces`, add the plugin
   again, and update the hook paths in `~/.claude/settings.json`.
+- README: screenshots from the product film, requirements, and update and
+  removal instructions
+- Marketplace preview image
+- Verified with the bar on the top, bottom, left and right edges
 
 ## 0.3.0
 
