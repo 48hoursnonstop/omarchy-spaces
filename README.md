@@ -3,43 +3,28 @@
 <h3 align="center">See what runs on every workspace.</h3>
 
 <p align="center">
-  <img src=".github/assets/bar.png" width="700" alt="Spaces in the Omarchy bar: workspace 1 open with its app icons, other workspaces showing theirs" />
+  <img src=".github/assets/film-apps.png" width="100%" alt="The Omarchy bar with Spaces: five workspaces, each showing the app icons open on it" />
 </p>
 
 Spaces is a workspace switcher for the [Omarchy](https://omarchy.org) bar. Each workspace shows the icons of the apps open on it. The active one slides open, and the focused window is highlighted.
 
+## Peek before you jump
+
 Hover another workspace to see it live, laid out the way it is on screen. Click a window in the preview to jump to it.
 
 <p align="center">
-  <img src=".github/assets/preview.png" width="560" alt="Live preview of workspace 6 showing btop and fastfetch side by side" />
+  <img src=".github/assets/film-preview.png" width="100%" alt="Hovering workspace 2 opens a live preview with omarchy.org and Neovim side by side" />
 </p>
 
-## Install
-
-```sh
-omarchy plugin add https://github.com/tornikegomareli/omarchy-spaces.git --enable
-omarchy plugin disable omarchy.workspaces   # optional: replace the built-in switcher
-```
-
-Requires Omarchy with the Quickshell bar and Hyprland.
-
-## Using it
-
-- Click a workspace to go there. Click an icon to focus that window.
-- Scroll over the widget to move between workspaces.
-- Hover an icon to see the window title.
-- Hover another workspace to preview it. Click a window in the preview to focus it.
-- Right-click the widget, or click the gear that shows on hover, to open settings.
-
-## Agent status
+## Know when your agent needs you
 
 Terminals running Claude Code get a badge: a spinner while the agent works, a pulsing `!` when it needs your input, and a check mark when it is done. A workspace with an agent waiting on you pulses too.
 
 <p align="center">
-  <img src=".github/assets/agents.png" width="520" alt="Three workspaces: an agent working on 6, finished on 7, waiting for input on 8" />
+  <img src=".github/assets/film-agent.png" width="100%" alt="A terminal icon on workspace 4 with an orange exclamation badge: the agent needs input" />
 </p>
 
-Add these hooks to `~/.claude/settings.json`:
+To turn it on, add these hooks to `~/.claude/settings.json`:
 
 ```json
 {
@@ -55,11 +40,50 @@ Add these hooks to `~/.claude/settings.json`:
 
 Other agents can report the same way: `omarchy-shell insanearts.spaces agent <session> <working|waiting|done|end> <pids>`, where `<pids>` lists the agent's process and its parents, comma-separated.
 
+## Install
+
+```sh
+omarchy plugin add https://github.com/tornikegomareli/omarchy-spaces.git --enable
+omarchy plugin disable omarchy.workspaces   # optional: replace the built-in switcher
+```
+
+Requirements:
+
+- Omarchy 4 with the Quickshell bar (Hyprland 0.56 or newer)
+- `jq` for the agent hook (installed with Omarchy)
+- Claude Code, only for agent status
+
+Tested with a top bar on a single monitor.
+
+To update, then load the new code:
+
+```sh
+omarchy plugin update insanearts.spaces
+omarchy restart shell
+```
+
+## Remove
+
+```sh
+omarchy plugin remove insanearts.spaces
+omarchy plugin enable omarchy.workspaces   # bring back the built-in switcher
+```
+
+If you added the agent hooks or the settings key below, delete those lines from `~/.claude/settings.json` and `~/.config/hypr/bindings.lua`.
+
+## Using it
+
+- Click a workspace to go there. Click an icon to focus that window.
+- Scroll over the widget to move between workspaces.
+- Hover an icon to see the window title.
+- Hover another workspace to preview it. Click a window in the preview to focus it.
+- Right-click the widget, or click the gear that shows on hover, to open settings.
+
 ## Settings
 
 <img src=".github/assets/settings.png" width="330" align="right" alt="Spaces settings panel" />
 
-Choose when icons show (always, active, on hover, or never), icon style and size, grouping by app, the active workspace style, density, urgent highlights, and more. Settings are saved to `~/.config/omarchy/shell.json`.
+Choose when icons show (always, active, on hover, or never), icon style and size, grouping by app, previews, agent status, the active workspace style, density, and more. Settings are saved to `~/.config/omarchy/shell.json`.
 
 To open settings with a key, add this to `~/.config/hypr/bindings.lua`:
 
