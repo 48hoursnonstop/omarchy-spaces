@@ -35,6 +35,10 @@ Requires Omarchy with the Quickshell bar and Hyprland.
 
 Terminals running Claude Code get a badge: a spinner while the agent works, a pulsing `!` when it needs your input, and a check mark when it is done. A workspace with an agent waiting on you pulses too.
 
+<p align="center">
+  <img src=".github/assets/agents.png" width="520" alt="Three workspaces: an agent working on 6, finished on 7, waiting for input on 8" />
+</p>
+
 Add these hooks to `~/.claude/settings.json`:
 
 ```json
