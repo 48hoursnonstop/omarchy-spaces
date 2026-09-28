@@ -9,6 +9,7 @@ import tempfile
 
 PLUGIN = "tornikegomareli.spaces"
 WORKSPACES = "omarchy.workspaces"
+DESKTOP = PLUGIN + ".desktop"
 config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 state_home = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
 config_path = config_home / "omarchy/shell.json"
@@ -101,12 +102,27 @@ def clean_agent_hooks():
 
 def main(action):
     config = read(config_path, {})
-    if action == "capture":
+    if action in ("checkpoint", "restore-checkpoint") and len(sys.argv) != 3:
+        raise ValueError("A checkpoint path is required")
+    if action == "checkpoint":
+        owned = {PLUGIN, WORKSPACES, DESKTOP}
+        write(Path(sys.argv[2]), {"entries": entries(config, owned),
+            "plugins": [e for e in config.get("plugins", []) if e.get("id") in owned],
+            "disabled": [e for e in config.get("disabledPlugins", []) if e in owned]})
+    elif action == "restore-checkpoint":
+        saved = read(Path(sys.argv[2]))
+        remove_entries(config, {PLUGIN, WORKSPACES, DESKTOP})
+        restore_entries(config, saved["entries"])
+        config["plugins"].extend(saved["plugins"])
+        if saved["disabled"]:
+            config.setdefault("disabledPlugins", []).extend(saved["disabled"])
+        write(config_path, config)
+    elif action == "capture":
         if journal.exists():
             if read(journal).get("schemaVersion") != 1:
                 raise ValueError("Unknown installation journal version")
             return
-        owned = {PLUGIN, WORKSPACES}
+        owned = {PLUGIN, WORKSPACES, DESKTOP}
         write(journal, {"schemaVersion": 1, "complete": False, "entries": entries(config, owned),
                        "plugins": [e for e in config.get("plugins", []) if e.get("id") in owned],
                        "disabled": [e for e in config.get("disabledPlugins", []) if e in owned]})
@@ -125,16 +141,20 @@ def main(action):
             restore_entries(config, [item])
         # Native widgets are enabled by their layout presence. plugins[] is an
         # opt-in list, not an enabled/disabled map. Activate in one file write.
+        remove_entries(config, {DESKTOP})
+        layout(config).setdefault("right", []).append({
+            "id": DESKTOP, "type": "qml",
+            "source": str(config_home / "omarchy/plugins" / PLUGIN / "ShowDesktop.qml")})
         remove_disabled(config, {PLUGIN})
         write(config_path, config)
     elif action in ("remove", "rollback"):
         saved = read(journal, {"entries": [], "plugins": []})
-        ids = {PLUGIN, WORKSPACES} if action == "rollback" else {PLUGIN}
+        ids = {PLUGIN, WORKSPACES, DESKTOP} if action == "rollback" else {PLUGIN, DESKTOP}
         remove_entries(config, ids)
         # Revert only the default switcher's override made by our installer.
         if journal.exists():
             config["plugins"] = [e for e in config["plugins"] if e.get("id") != WORKSPACES]
-            keep = {PLUGIN, WORKSPACES} if action == "rollback" else {WORKSPACES}
+            keep = {PLUGIN, WORKSPACES, DESKTOP} if action == "rollback" else {WORKSPACES}
             remove_disabled(config, keep)
             restore_entries(config, [e for e in saved["entries"] if e["entry"]["id"] in keep])
             config["plugins"].extend(e for e in saved["plugins"] if e.get("id") in keep)
@@ -150,6 +170,6 @@ def main(action):
 
 if __name__ == "__main__":
     try:
-        main(sys.argv[1] if len(sys.argv) == 2 else "")
+        main(sys.argv[1] if len(sys.argv) in (2, 3) else "")
     except (ValueError, KeyError, OSError, TypeError) as error:
         sys.exit(f"Spaces installation state: {error}")

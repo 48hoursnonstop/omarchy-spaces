@@ -13,10 +13,10 @@ This fork adds window controls from workspace-taskbar to [Tornike Gomareli's Spa
 ## Window controls
 
 - Click a focused window to minimize it; click its dimmed icon to restore it. Turn this behavior off in settings if you prefer focus-only clicks. Grouped app icons keep cycling; their context menu lets you choose a specific window.
-- Use the desktop button inside an occupied workspace pill to hide that workspace's visible windows. Click again to restore that batch. Windows minimized separately stay minimized.
+- Use the narrow strip at the far right screen edge to hide that monitor's active workspace windows. Click again to restore that batch. Windows minimized separately stay minimized.
 - Right-click an app icon for minimize/restore, maximize, move to another workspace or monitor, scratchpad, Pop out, floating, fullscreen, pseudo, grouping, pinning or close. Availability follows the selected window's state.
 - Pin an application from its window menu. Closed applications appear in a compact launcher pill; a running or minimized application keeps its place in its workspace. App names, icons and launching come from Omarchy's AppLibrary.
-- Right-click the desktop button for workspace actions, including restoring its minimized windows. The layout switch is available on the focused workspace.
+- Workspace actions, including restoring minimized windows, are available from the preview's Window actions menu. The layout switch is available on the focused workspace.
 - Minimized windows appear as restore buttons below the live workspace preview. The `+N` overflow opens a complete window list. Menus support arrows, Tab, Enter and Escape and scroll when necessary.
 - Settings include Restore last, Restore all and Recover hidden windows, plus visible diagnostics for failed operations or an unavailable helper.
 
@@ -57,7 +57,7 @@ Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agen
 ## Install
 
 ```sh
-git clone --branch feature/window-controls https://github.com/48hoursnonstop/omarchy-spaces.git \
+git clone --branch fix/v1-desktop-corner https://github.com/48hoursnonstop/omarchy-spaces.git \
   ~/.config/omarchy/plugins/tornikegomareli.spaces
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
 ```

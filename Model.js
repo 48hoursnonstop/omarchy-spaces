@@ -33,7 +33,7 @@ var DEFAULTS = {
   previewLive: true,          // keep previews streaming; false = one frame
   agentStatus: true,          // badges for coding agents running in terminals
   minimizeOnClick: true,
-  desktopButton: true
+  desktopButton: false
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]

@@ -685,7 +685,7 @@ Panel {
         Grid {
           id: content
           anchors.centerIn: parent
-          columns: root.vertical ? 1 : 3
+          columns: root.vertical ? 1 : (desktopControl.visible ? 3 : 2)
           horizontalItemAlignment: Grid.AlignHCenter
           verticalItemAlignment: Grid.AlignVCenter
           spacing: pill.label !== "" && iconClip.shownExtent > 0 ? Style.space(5) : 0
@@ -718,7 +718,7 @@ Panel {
 
             Grid {
               id: icons
-              columns: root.vertical ? 1 : Math.max(1, pill.itemKeys.length + 1)
+              columns: root.vertical ? 1 : Math.max(1, pill.itemKeys.length + (pill.iconData.overflow > 0 ? 1 : 0))
               spacing: Style.space(root.metrics.iconGap)
               verticalItemAlignment: Grid.AlignVCenter
               horizontalItemAlignment: Grid.AlignHCenter
@@ -1005,6 +1005,7 @@ Panel {
           }
 
           ActionIcon {
+            id: desktopControl
             visible: root.cfg.desktopButton && pill.workspaceId > 0 && pill.occupied
               && (pill.active || pill.hovered || pill.desktopHidden)
             symbol: pill.desktopHidden ? "\uf2d2" : "\uf108"

@@ -247,7 +247,7 @@
         "key": "desktopButton",
         "type": "bool",
         "label": "Show desktop button in workspaces",
-        "default": true
+        "default": false
       }
     ]
   }
