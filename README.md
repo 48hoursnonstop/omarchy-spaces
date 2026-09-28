@@ -8,6 +8,20 @@
 
 Spaces is a workspace switcher for the [Omarchy](https://omarchy.org) bar. Each workspace shows the icons of the apps open on it. The active one slides open, and the focused window is highlighted.
 
+This fork adds window controls from workspace-taskbar to [Tornike Gomareli's Spaces](https://github.com/tornikegomareli/omarchy-spaces). Minimized windows stay in their original workspace pill, desktop controls belong to each workspace, and window actions use Omarchy's native menus. The existing previews, settings, optional app grouping and agent badges remain part of Spaces.
+
+## Window controls
+
+- Click a focused window to minimize it; click its dimmed icon to restore it. Turn this behavior off in settings if you prefer focus-only clicks. Grouped app icons keep cycling; their context menu lets you choose a specific window.
+- Use the desktop button inside an occupied workspace pill to hide that workspace's visible windows. Click again to restore that batch. Windows minimized separately stay minimized.
+- Right-click an app icon for minimize/restore, maximize, move to another workspace or monitor, scratchpad, Pop out, floating, fullscreen, pseudo, grouping, pinning or close. Availability follows the selected window's state.
+- Pin an application from its window menu. Closed applications appear in a compact launcher pill; a running or minimized application keeps its place in its workspace. App names, icons and launching come from Omarchy's AppLibrary.
+- Right-click the desktop button for workspace actions, including restoring its minimized windows. The layout switch is available on the focused workspace.
+- Minimized windows appear as restore buttons below the live workspace preview. The `+N` overflow opens a complete window list. Menus support arrows, Tab, Enter and Escape and scroll when necessary.
+- Settings include Restore last, Restore all and Recover hidden windows, plus visible diagnostics for failed operations or an unavailable helper.
+
+The helper saves workspace, monitor, floating geometry, fullscreen, pin, pseudo and group state before hiding windows. Recovery retains unfinished operations for retry. It does not reconstruct the exact tiling tree. See [verification and remaining release checks](docs/verification.md).
+
 ## Peek before you jump
 
 Hover another workspace to see it live, laid out the way it is on screen. Click a window in the preview to jump to it.
@@ -43,47 +57,55 @@ Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agen
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/tornikegomareli/omarchy-spaces.git --enable
+git clone --branch feature/window-controls https://github.com/48hoursnonstop/omarchy-spaces.git \
+  ~/.config/omarchy/plugins/tornikegomareli.spaces
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
 omarchy plugin disable omarchy.workspaces   # optional: replace the built-in switcher
 ```
 
 Requirements:
 
-- Omarchy 4 with the Quickshell bar (Hyprland 0.56 or newer)
-- `jq` for the agent hook (installed with Omarchy)
+- Omarchy 4.0.4 with its Quickshell bar; reviewed with Quickshell 0.3.1
+- Hyprland **0.56.x**, using its Lua dispatcher API
+- Rust 1.89 or newer, Cargo, a C linker and `jq` to build the helper
 - Claude Code, only for agent status
 
-Works with the bar on any edge of the screen. Tested on a single monitor.
+This fork keeps the plugin ID `tornikegomareli.spaces`, so it replaces an upstream Spaces installation and preserves its settings and agent hooks. If that directory already exists, use your existing checkout to switch to this fork's branch; do not clone over it. The installer validates and builds before enabling. Do not enable directly before building the helper.
+
+Its helper, preferences, lock and hidden workspace use their own Spaces namespace. It does not import workspace-taskbar's restore journal or take ownership of windows hidden by that plugin. Restore those windows with workspace-taskbar before replacing it. Optional Hyprbars controls must have only one owner.
 
 To update, then load the new code:
 
 ```sh
-omarchy plugin update tornikegomareli.spaces
-omarchy restart shell
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/update.sh
 ```
 
 ## Remove
 
 ```sh
-omarchy plugin remove tornikegomareli.spaces
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/uninstall.sh
 omarchy plugin enable omarchy.workspaces   # bring back the built-in switcher
 ```
 
 If you added the agent hooks or the settings key below, delete those lines from `~/.claude/settings.json` and `~/.config/hypr/bindings.lua`.
 
+The uninstall script restores hidden windows and verifies recovery before removing runtime state. If recovery fails it stops with the journal preserved. Do not use `omarchy plugin remove` alone while windows are minimized. Pins and application overrides are retained as preferences.
+
 ## Using it
 
-- Click a workspace to go there. Click an icon to focus that window.
+- Click a workspace to go there. Click an icon to focus, minimize or restore its window.
 - Scroll over the widget to move between workspaces.
 - Hover an icon to see the window title.
 - Hover another workspace to preview it. Click a window in the preview to focus it.
-- Right-click the widget, or click the gear that shows on hover, to open settings.
+- Right-click the widget background, or click its gear, to open settings. Right-click an app icon for its window menu.
 
 ## Settings
 
 <img src=".github/assets/settings.png" width="330" align="right" alt="Spaces settings panel" />
 
 Choose when icons show (always, active, on hover, or never), icon style and size, grouping by app, previews, agent status, the active workspace style, density, and more. Settings are saved to `~/.config/omarchy/shell.json`.
+
+The upstream screenshots show the original appearance; the new controls follow the same geometry, colors and font.
 
 To open settings with a key, add this to `~/.config/hypr/bindings.lua`:
 
@@ -107,16 +129,55 @@ omarchy bar set tornikegomareli.spaces showApps all
 
 ## Development
 
-From a clone of this repository, link it into Omarchy and run the tests:
+From a clone, run tests without installing or changing your desktop:
 
 ```sh
-ln -sfn "$PWD" ~/.config/omarchy/plugins/tornikegomareli.spaces
-omarchy plugin enable tornikegomareli.spaces
-node tests/model.test.js
+export CARGO_TARGET_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-spaces-dev/cargo-target"
+cargo test --manifest-path backend/Cargo.toml --locked
+cargo build --manifest-path backend/Cargo.toml --locked --release
+SPACES_TEST_BINARY="$CARGO_TARGET_DIR/release/spaces-backend" python3 tests/backend/test_transactions.py
+tests/smoke/static.sh
+python3 tests/smoke/lifecycle.test.py
+scripts/check-qml.sh
+python3 tests/qml/service.test.py
+# Optional graphical test: requires labwc and wtype; starts its own compositor.
+python3 tests/qml/ui.test.py
 ```
 
-After code changes, run `omarchy restart shell`.
+Build outputs must stay outside the recursively watched plugin source tree. `scripts/build-backend.sh` builds in XDG cache and atomically installs the helper into XDG data. The QML service uses protocol 6 and refuses incompatible helpers. Rebuild after helper changes; the source itself hot-reloads when installed.
+
+## Recovery and diagnostics
+
+```sh
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/doctor.sh
+omarchy-shell tornikegomareli.spaces status
+omarchy-shell tornikegomareli.spaces showDesktop 3
+omarchy-shell tornikegomareli.spaces restoreLast
+omarchy-shell tornikegomareli.spaces restoreAll
+omarchy-shell tornikegomareli.spaces recover
+```
+
+The IPC replies indicate queuing; check settings or `status` for the eventual result. If the shell cannot load, run the helper directly:
+
+```sh
+~/.local/share/tornikegomareli.spaces/bin/spaces-backend --protocol 6 recover
+```
+
+Default paths (all honor their corresponding XDG variable):
+
+| Data | Location |
+| --- | --- |
+| Helper | `~/.local/share/tornikegomareli.spaces/bin/spaces-backend` |
+| Restore journal | `~/.local/state/tornikegomareli.spaces/restore-v1.json` |
+| Pins and application overrides | `~/.config/tornikegomareli.spaces/` |
+| Build cache | `~/.cache/tornikegomareli.spaces/` |
+
+Application overrides select an existing AppLibrary desktop entry, for example `{"matches":{"window-class":"desktop-entry-id"}}` in `overrides.json`. A missing icon uses a placeholder; Spaces does not scan icon directories or replace the launcher's icon choices.
+
+## Optional titlebar controls
+
+`scripts/setup-hyprbars.sh` installs minimize, maximize/restore and close buttons through the official Hyprbars plugin and `hyprpm`. Use `--status` to inspect it or `--remove` to remove the managed integration. Installation is optional and requires the Hyprbars build dependencies when the plugin is not already loaded. Existing workspace-taskbar titlebar integration must be removed first. Spaces does not add an empty-titlebar context menu.
 
 ## License
 
-[MIT License](LICENSE).
+[MIT License](LICENSE), with the original Spaces attribution preserved. The backend, application matcher, service/menu foundation and maintenance tools adapted from workspace-taskbar retain their [MIT attribution](LICENSE.workspace-taskbar).

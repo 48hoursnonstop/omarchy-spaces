@@ -66,19 +66,6 @@ test("focusedLabel uses app name for single window, title for many", () => {
   assert.strictEqual(M.focusedLabel({ focused: false, count: 1 }, "Foot", 20), "")
 })
 
-test("webAppHost parses chromium app classes", () => {
-  assert.strictEqual(M.webAppHost("chrome-web.whatsapp.com__-Default"), "web.whatsapp.com")
-  assert.strictEqual(M.webAppHost("brave-app.hey.com__-Profile_1"), "app.hey.com")
-  assert.strictEqual(M.webAppHost("chrome-x.com__home-Default"), "x.com")
-  assert.strictEqual(M.webAppHost("foot"), "")
-})
-
-test("iconPathScore prefers svg then larger png", () => {
-  assert.ok(M.iconPathScore("/a/scalable/apps/x.svg") > M.iconPathScore("/a/128x128/apps/x.png"))
-  assert.ok(M.iconPathScore("/a/128x128/apps/x.png") > M.iconPathScore("/a/16x16/apps/x.png"))
-  assert.strictEqual(M.iconNameFromPath("/a/b/zen-browser.png"), "zen-browser")
-})
-
 test("stepWorkspace wraps", () => {
   assert.strictEqual(M.stepWorkspace([1, 2, 5], 5, 1), 1)
   assert.strictEqual(M.stepWorkspace([1, 2, 5], 1, -1), 5)
@@ -153,12 +140,6 @@ test("preview settings validate", () => {
   assert.strictEqual(M.previewWidth("large"), 520)
 })
 
-test("appIdCandidates adds the last reverse-DNS segment", () => {
-  assert.deepStrictEqual(M.appIdCandidates("dev.tgomareli.logi-kvm-console"), ["dev.tgomareli.logi-kvm-console", "logi-kvm-console"])
-  assert.deepStrictEqual(M.appIdCandidates("Slack"), ["Slack", "slack"])
-  assert.deepStrictEqual(M.appIdCandidates(""), [])
-})
-
 test("agentStates picks the nearest window and the most urgent state", () => {
   const windows = { 100: true, 200: true, 300: true }
   const agents = {
@@ -173,6 +154,55 @@ test("agentStates picks the nearest window and the most urgent state", () => {
 
 test("parsePids drops junk and init", () => {
   assert.deepStrictEqual(M.parsePids("12,abc,1,,34"), [12, 34])
+})
+
+test("minimized windows preserve their original workspace after Hyprland removes it", () => {
+  const window = { address: "0xa", workspace: 4, workspaceName: "4", monitorId: 2, minimized: true }
+  const map = M.projectWorkspaces([], [window], 2, true)
+  assert.deepStrictEqual(map[4].windows, [window])
+  assert.deepStrictEqual(M.workspaceIds({ 4: 1 }, [1], 0, true), [1, 4])
+  assert.deepStrictEqual(M.projectWorkspaces([], [window], 1, true), {})
+})
+
+test("a workspace moved to another monitor overrides the journal's old monitor", () => {
+  const meta = [{ id: 4, name: "4", monitorId: 1, area: null }]
+  const window = { workspace: 4, monitorId: 2, minimized: true }
+  assert.strictEqual(M.projectWorkspaces(meta, [window], 1, true)[4].windows.length, 1)
+  assert.deepStrictEqual(M.projectWorkspaces(meta, [window], 2, true), {})
+})
+
+test("private hidden workspaces stay private and scratchpad remains accessible", () => {
+  const map = M.projectWorkspaces([], [
+    { workspace: -99, workspaceName: "special:omarchy-spaces-minimized" },
+    { workspace: -98, workspaceName: "special:scratchpad", address: "0xb" }
+  ], -1, false)
+  assert.strictEqual(map[-99], undefined)
+  assert.strictEqual(map[-98].windows[0].address, "0xb")
+  assert.deepStrictEqual(M.workspaceIds({ "-98": 1 }, [1], 0, true), [1, -98])
+  assert.strictEqual(M.workspaceLabel(-98, false, "number", "special:scratchpad"), "S")
+})
+
+test("grouped apps retain all addresses and distinguish partially minimized groups", () => {
+  const windows = [
+    { address: "0xa", appId: "foot", minimized: true },
+    { address: "0xb", appId: "foot", minimized: false, busy: true, popped: true }
+  ]
+  const item = M.iconItems(windows, true, 8).items[0]
+  assert.deepStrictEqual(item.addresses, ["0xa", "0xb"])
+  assert.strictEqual(item.address, "0xb")
+  assert.strictEqual(item.focused, false)
+  assert.strictEqual(item.minimized, false)
+  assert.strictEqual(item.minimizedCount, 1)
+  assert.strictEqual(item.busy, true)
+  assert.strictEqual(item.popped, true)
+  windows[1].minimized = true
+  assert.strictEqual(M.iconItems(windows, true, 8).items[0].minimized, true)
+})
+
+test("Show Desktop state distinguishes its batch from manually minimized windows", () => {
+  assert.strictEqual(M.desktopHidden([{ minimized: true }]), false)
+  assert.strictEqual(M.desktopHidden([{ desktopBatch: "desktop:4:123", minimized: true }]), true)
+  assert.strictEqual(M.resolveSettings({ minimizeOnClick: false, desktopButton: false }).minimizeOnClick, false)
 })
 
 if (failed) { console.log(failed + " failed"); process.exit(1) }

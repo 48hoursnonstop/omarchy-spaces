@@ -13,3 +13,6 @@
 *.bak.*
 *.log
 node_modules/
+
+# Build output belongs in XDG cache, outside the watched plugin tree.
+backend/target/

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0-rc.1 (fork)
+
+- Integrated transactional minimize/restore and Show desktop into workspace pills; minimized windows retain their original workspace and monitor.
+- Added per-window, grouped-window, pinned-launcher and workspace menus using Omarchy's native controls, keyboard focus and scrolling.
+- Added Pop out, window movement, scratchpad, maximize/fullscreen, floating, pinning, pseudo and group actions.
+- Added closed-app launchers, AppLibrary identity and overrides, recovery controls and visible operation errors.
+- Preserved live workspace previews and agent status; minimized windows get restore chips below previews and all overflow windows remain reachable.
+- Added a protocol-checked Rust helper, namespaced restore state, install/update/recovery-aware uninstall scripts, optional Hyprbars controls and automated checks.
+- Kept the original plugin ID, settings and agent-hook IPC. This is a release candidate; see `docs/verification.md` for coverage and remaining live-session checks.
+
 ## 1.0.0
 
 First stable release, ready for the Omarchy plugin marketplace.

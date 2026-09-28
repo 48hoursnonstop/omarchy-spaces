@@ -31,7 +31,9 @@ var DEFAULTS = {
   previews: true,             // live preview of a workspace on hover
   previewSize: "medium",      // "small" | "medium" | "large"
   previewLive: true,          // keep previews streaming; false = one frame
-  agentStatus: true           // badges for coding agents running in terminals
+  agentStatus: true,          // badges for coding agents running in terminals
+  minimizeOnClick: true,
+  desktopButton: true
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]
@@ -89,7 +91,9 @@ function resolveSettings(raw) {
     previews: bool(s.previews, d.previews),
     previewSize: oneOf(s.previewSize, PREVIEW_SIZES, d.previewSize),
     previewLive: bool(s.previewLive, d.previewLive),
-    agentStatus: bool(s.agentStatus, d.agentStatus)
+    agentStatus: bool(s.agentStatus, d.agentStatus),
+    minimizeOnClick: bool(s.minimizeOnClick, d.minimizeOnClick),
+    desktopButton: bool(s.desktopButton, d.desktopButton)
   }
 }
 
@@ -128,7 +132,7 @@ function normalizeAddress(address) {
 function workspaceIds(occupied, activeIds, persistent, hideEmpty) {
   var ids = []
   function add(id) {
-    if (id > 0 && ids.indexOf(id) === -1) ids.push(id)
+    if (id !== 0 && isFinite(id) && ids.indexOf(id) === -1) ids.push(id)
   }
 
   if (!hideEmpty) for (var p = 1; p <= persistent; p++) add(p)
@@ -138,13 +142,14 @@ function workspaceIds(occupied, activeIds, persistent, hideEmpty) {
   }
   for (var a = 0; a < activeIds.length; a++) add(activeIds[a])
 
-  ids.sort(function(l, r) { return l - r })
+  ids.sort(function(l, r) { return (l > 0 && r < 0) ? -1 : (l < 0 && r > 0) ? 1 : l - r })
   return ids
 }
 
 // Label text for a workspace pill.
-function workspaceLabel(id, focused, style) {
+function workspaceLabel(id, focused, style, name) {
   if (style === "none") return ""
+  if (id < 0) return String(name || "special").replace(/^special:/, "").slice(0, 1).toUpperCase()
   if (style === "glyph" && focused) return "󱓻"
   return id === 10 ? "0" : String(id)
 }
@@ -185,23 +190,27 @@ function iconItems(windows, groupApps, maxIcons) {
       var k = appKey(w.appId) || w.address
       var existing = byApp[k]
       if (!existing) {
-        existing = { key: k, address: w.address, appId: w.appId, title: w.title, focused: w.focused, count: 1, addresses: [w.address] }
+        existing = windowItem(w, k)
         byApp[k] = existing
         items.push(existing)
       } else {
         existing.count++
         existing.addresses.push(w.address)
-        if (w.focused) {
-          existing.focused = true
+        existing.minimizedCount += w.minimized ? 1 : 0
+        existing.busy = existing.busy || !!w.busy
+        existing.popped = existing.popped || !!w.popped
+        if (w.focused || (existing.minimized && !w.minimized)) {
           existing.address = w.address
           existing.title = w.title
+          existing.focused = !!w.focused
         }
+        existing.minimized = existing.minimizedCount === existing.count
       }
     }
   } else {
     for (var j = 0; j < windows.length; j++) {
       var x = windows[j]
-      items.push({ key: x.address, address: x.address, appId: x.appId, title: x.title, focused: x.focused, count: 1, addresses: [x.address] })
+      items.push(windowItem(x, x.address))
     }
   }
 
@@ -217,6 +226,45 @@ function iconItems(windows, groupApps, maxIcons) {
   return { items: items, overflow: overflow }
 }
 
+function windowItem(w, key) {
+  return {
+    key: key, address: w.address, appId: w.appId, desktopId: w.desktopId || "",
+    title: w.title, focused: !!w.focused, count: 1, addresses: [w.address],
+    minimized: !!w.minimized, minimizedCount: w.minimized ? 1 : 0,
+    busy: !!w.busy, popped: !!w.popped
+  }
+}
+
+// Project service rows onto workspace pills, including workspaces Hyprland
+// removed after their last window was minimized. Hidden clients keep their
+// original workspace and monitor through the restore journal.
+function projectWorkspaces(workspaces, windows, monitorId, perMonitor) {
+  var map = {}, metadata = {}
+  for (var i = 0; i < workspaces.length; i++) {
+    var ws = workspaces[i]
+    metadata[ws.id] = ws
+    if (ws.id > 0 && (!perMonitor || ws.monitorId === monitorId))
+      map[ws.id] = { id: ws.id, name: ws.name, windows: [], area: ws.area }
+  }
+  for (var j = 0; j < windows.length; j++) {
+    var w = windows[j]
+    if (!w.workspace || w.workspaceName === "special:omarchy-spaces-minimized") continue
+    var meta = metadata[w.workspace]
+    var owner = meta ? meta.monitorId : w.monitorId
+    if (perMonitor && owner >= 0 && owner !== monitorId) continue
+    if (!map[w.workspace]) map[w.workspace] = {
+      id: w.workspace, name: w.workspaceName, windows: [], area: meta ? meta.area : null
+    }
+    map[w.workspace].windows.push(w)
+  }
+  for (var id in map) map[id].windows = sortWindows(map[id].windows)
+  return map
+}
+
+function desktopHidden(windows) {
+  return windows.some(function(w) { return !!w.desktopBatch })
+}
+
 function truncate(text, max) {
   var t = String(text || "")
   return t.length > max ? t.slice(0, Math.max(1, max - 1)) + "…" : t
@@ -228,47 +276,6 @@ function focusedLabel(item, appName, maxLength) {
   if (!item || !item.focused) return ""
   var text = item.count > 1 || !appName ? item.title : appName
   return truncate(text, maxLength)
-}
-
-// Lookup keys for an app id, most specific first. Reverse-DNS ids such as
-// "dev.example.my-tool" often ship a desktop file named after the last part.
-function appIdCandidates(appId) {
-  var id = String(appId || "")
-  if (id === "") return []
-  var out = [id]
-  function add(v) { if (v && out.indexOf(v) === -1) out.push(v) }
-  add(id.toLowerCase())
-  var dot = id.lastIndexOf(".")
-  if (dot > 0 && dot < id.length - 1) {
-    add(id.slice(dot + 1))
-    add(id.slice(dot + 1).toLowerCase())
-  }
-  return out
-}
-
-// Chromium-family --app windows use classes like
-// "chrome-web.whatsapp.com__-Default" or "brave-app.hey.com__-Profile_1".
-// Returns the host ("web.whatsapp.com") or "" when the class is not one.
-function webAppHost(appId) {
-  var m = /^(?:chrome|chromium|brave|msedge|vivaldi|helium|opera)-([^_]+?)(?:__|_).*-(?:Default|Profile_\d+)$/i.exec(String(appId || ""))
-  return m ? m[1] : ""
-}
-
-// Icon candidates scanned from disk: prefer scalable, then the largest raster.
-function iconPathScore(path) {
-  var p = String(path || "")
-  if (/\.svg$/i.test(p)) return 100000
-  var m = /\/(\d+)x\d+\//.exec(p)
-  if (m) return Number(m[1])
-  return /\/pixmaps\//.test(p) ? 48 : 1
-}
-
-function iconNameFromPath(path) {
-  var value = String(path || "")
-  var slash = value.lastIndexOf("/")
-  var file = slash >= 0 ? value.slice(slash + 1) : value
-  var dot = file.lastIndexOf(".")
-  return dot > 0 ? file.slice(0, dot) : file
 }
 
 // Width of the workspace miniature, in unscaled px.
@@ -396,7 +403,8 @@ if (typeof module !== "undefined") {
     previewWidth: previewWidth, monitorArea: monitorArea, previewLayout: previewLayout, durationFor: durationFor,
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
-    focusedLabel: focusedLabel, webAppHost: webAppHost, appIdCandidates: appIdCandidates, iconPathScore: iconPathScore,
-    iconNameFromPath: iconNameFromPath, stepWorkspace: stepWorkspace, mergedEntry: mergedEntry
+    focusedLabel: focusedLabel,
+    stepWorkspace: stepWorkspace, mergedEntry: mergedEntry,
+    projectWorkspaces: projectWorkspaces, desktopHidden: desktopHidden
   }
 }

@@ -2,14 +2,18 @@
   "schemaVersion": 1,
   "id": "tornikegomareli.spaces",
   "name": "Spaces",
-  "version": "1.0.0",
+  "version": "1.1.0-rc.1",
   "author": "Tornike Gomareli",
-  "description": "Workspace switcher that shows the apps open on each workspace",
+  "description": "Workspace switcher with live previews, window controls, minimize/restore and pinned launchers",
   "kinds": [
-    "bar-widget"
+    "service",
+    "bar-widget",
+    "menu"
   ],
   "entryPoints": {
-    "barWidget": "Spaces.qml"
+    "barWidget": "Spaces.qml",
+    "service": "SpacesService.qml",
+    "menu": "WindowMenu.qml"
   },
   "barWidget": {
     "displayName": "Spaces",
@@ -231,6 +235,18 @@
         "key": "agentStatus",
         "type": "bool",
         "label": "Agent status",
+        "default": true
+      },
+      {
+        "key": "minimizeOnClick",
+        "type": "bool",
+        "label": "Click active window to minimize",
+        "default": true
+      },
+      {
+        "key": "desktopButton",
+        "type": "bool",
+        "label": "Show desktop button in workspaces",
         "default": true
       }
     ]

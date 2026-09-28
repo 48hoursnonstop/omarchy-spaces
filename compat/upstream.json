@@ -1,0 +1,67 @@
+{
+  "reviewedOn": "2026-09-27",
+  "omarchy": {
+    "baseline": "4.0.4",
+    "tag": "v4.0.4",
+    "releaseCommit": "c668141",
+    "pluginSchema": 1,
+    "requiredCapabilities": [
+      "serviceFor",
+      "summon",
+      "appLibrary",
+      "bar.requestPopout"
+    ],
+    "reviewedFiles": {
+      "shell/services/PluginShellApi.qml": "9be7009df720a6b059c8837e281d2b8fde5661f7",
+      "shell/services/PluginAppLibraryApi.qml": "00d5e8f03bb110e5d5b69c31c3ed212c3d064633",
+      "shell/plugins/bar/widgets/Workspaces.qml": "ec0482a59ea06c0fc7b0dc2d1e35d6ecf2b7022a",
+      "shell/services/AppLibrary.qml": "738529de428e6b39eb1de326b7fe69600b08a241",
+      "default/hypr/bindings/tiling.lua": "7e2408d351afbd2b197a4f5088c3d4a7099067de"
+    }
+  },
+  "quickshell": {
+    "required": [
+      "Quickshell.Hyprland.HyprlandToplevel",
+      "Hyprland.refreshToplevels",
+      "ToplevelManager",
+      "Process",
+      "DesktopEntry.startupClass",
+      "DesktopEntry.command",
+      "DesktopEntry.execString"
+    ]
+  },
+  "hyprland": {
+    "configMode": "lua",
+    "requiredDispatchers": [
+      "hl.dsp.focus",
+      "hl.dsp.window.move",
+      "hl.dsp.window.resize",
+      "hl.dsp.window.float",
+      "hl.dsp.window.fullscreen",
+      "hl.dsp.window.fullscreen_state",
+      "hl.dsp.window.pseudo",
+      "hl.dsp.window.pin",
+      "hl.dsp.group.toggle",
+      "hl.dsp.window.alter_zorder"
+    ],
+    "testedVersion": "0.56.2",
+    "supportedApi": "0.56.x"
+  },
+  "hyprbars": {
+    "required": false,
+    "enabledByDefault": false,
+    "repository": "https://github.com/hyprwm/hyprland-plugins",
+    "manager": "hyprpm",
+    "reviewedApi": [
+      "hl.config plugin.hyprbars",
+      "hl.plugin.hyprbars.add_button",
+      "on_double_click"
+    ],
+    "titlebarButtons": [
+      "minimize",
+      "maximize",
+      "close"
+    ],
+    "emptyTitlebarRightClick": false
+  }
+}

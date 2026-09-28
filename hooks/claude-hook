@@ -11,7 +11,7 @@ pids=""
 pid=$PPID
 while [[ $pid -gt 1 && -r /proc/$pid/stat ]]; do
   pids+="${pids:+,}$pid"
-  stat=$(</proc/$pid/stat)
+  stat=$(</proc/"$pid"/stat)
   stat=${stat##*) }
   pid=$(cut -d' ' -f2 <<<"$stat")
 done
