@@ -10,6 +10,24 @@ Spaces is a workspace switcher for the [Omarchy](https://omarchy.org) bar. Each 
 
 This fork adds window controls from workspace-taskbar to [Tornike Gomareli's Spaces](https://github.com/tornikegomareli/omarchy-spaces). Minimized windows stay in their original workspace pill, desktop controls belong to each workspace, and window actions use Omarchy's native menus. The existing previews, settings, optional app grouping and agent badges remain part of Spaces.
 
+## Install v1.1.2
+
+Run in a terminal as your normal desktop user, **without sudo**. The installation folder must not already exist. Hyprpm may ask for your password and confirmation (`Y`) to install official Hyprbars.
+
+```bash
+git clone --branch v1.1.2 https://github.com/48hoursnonstop/omarchy-spaces.git ~/.config/omarchy/plugins/tornikegomareli.spaces && ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
+```
+
+[Download the release and SHA-256 checksum](https://github.com/48hoursnonstop/omarchy-spaces/releases/tag/v1.1.2). See [requirements](#requirements-and-installation-details) below.
+
+## Uninstall cleanly
+
+```bash
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/uninstall.sh --yes
+```
+
+This restores hidden windows and the previous workspace switcher, then removes Spaces, its desktop strip and managed Hyprbars integration. See [removal details](#remove).
+
 ## Window controls
 
 - Click a focused window to minimize it; click its dimmed icon to restore it. Turn this behavior off in settings if you prefer focus-only clicks. Grouped app icons keep cycling; their context menu lets you choose a specific window.
@@ -54,15 +72,7 @@ To turn it on, add these hooks to `~/.claude/settings.json`:
 
 Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agent <session> <working|waiting|done|end> <pids>`, where `<pids>` lists the agent's process and its parents, comma-separated.
 
-## Install
-
-```sh
-git clone --branch v1.1.2 https://github.com/48hoursnonstop/omarchy-spaces.git \
-  ~/.config/omarchy/plugins/tornikegomareli.spaces
-~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
-```
-
-Requirements:
+## Requirements and installation details
 
 - Omarchy 4.0.4 with its Quickshell bar; reviewed with Quickshell 0.3.1
 - Hyprland **0.56.x**, using its Lua dispatcher API
