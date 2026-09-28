@@ -36,9 +36,9 @@ set -euo pipefail
 if [[ ${1:-} == plugin && ${2:-} == list ]]; then
   [[ -f $MOCK_STATE/loaded ]] && echo 'name: hyprbars'
 elif [[ ${1:-} == reload ]]; then
-  :
+  exit "${MOCK_RELOAD_FAIL:-0}"
 elif [[ ${1:-} == configerrors ]]; then
-  :
+  exit "${MOCK_CONFIG_FAIL:-0}"
 else
   :
 fi
@@ -79,5 +79,39 @@ if test -e "$XDG_DATA_HOME/tornikegomareli.spaces/bin/spaces-hyprbars-action"; t
 if test -e "$XDG_STATE_HOME/tornikegomareli.spaces/hyprbars-ownership.env"; then echo "Forbidden condition detected" >&2; exit 1; fi
 if grep -Fq -- '-- >>> tornikegomareli.spaces:hyprbars >>>' "$XDG_CONFIG_HOME/hypr/hyprland.lua"; then echo "Forbidden condition detected" >&2; exit 1; fi
 if test -e "$MOCK_STATE/repo"; then echo "Forbidden condition detected" >&2; exit 1; fi
+
+# Reuse an existing official Hyprbars installation without taking ownership.
+touch "$MOCK_STATE/repo" "$MOCK_STATE/enabled" "$MOCK_STATE/loaded"
+"$ROOT/scripts/setup-hyprbars.sh" >/dev/null
+grep -Fq 'REPO_ADDED_BY_PROJECT=0' "$XDG_STATE_HOME/tornikegomareli.spaces/hyprbars-ownership.env"
+grep -Fq 'PLUGIN_ENABLED_BY_PROJECT=0' "$XDG_STATE_HOME/tornikegomareli.spaces/hyprbars-ownership.env"
+
+# A failed removal keeps ownership data so a later retry can finish cleanup.
+if MOCK_RELOAD_FAIL=1 "$ROOT/scripts/setup-hyprbars.sh" --remove >/dev/null 2>&1; then exit 1; fi
+test -f "$XDG_STATE_HOME/tornikegomareli.spaces/hyprbars-ownership.env"
+"$ROOT/scripts/setup-hyprbars.sh" --remove >/dev/null
+test -f "$MOCK_STATE/repo"
+test -f "$MOCK_STATE/enabled"
+
+# An unrelated Hyprbars configuration must be neither overwritten nor layered.
+printf '%s\n' 'hl.plugin.hyprbars.add_button({})' > "$XDG_CONFIG_HOME/hypr/personal.lua"
+if "$ROOT/scripts/setup-hyprbars.sh" --check >/dev/null 2>&1; then exit 1; fi
+test ! -f "$XDG_CONFIG_HOME/hypr/spaces-hyprbars.lua"
+rm "$XDG_CONFIG_HOME/hypr/personal.lua"
+
+# A failed compositor query cannot be mistaken for an empty error list.
+if MOCK_CONFIG_FAIL=1 "$ROOT/scripts/setup-hyprbars.sh" >/dev/null 2>&1; then exit 1; fi
+test ! -f "$XDG_CONFIG_HOME/hypr/spaces-hyprbars.lua"
+test -f "$MOCK_STATE/enabled"
+
+# Reversed managed markers must not cause removal of unrelated Lua content.
+cat > "$XDG_CONFIG_HOME/hypr/hyprland.lua" <<'LUA'
+-- <<< tornikegomareli.spaces:hyprbars <<<
+-- user configuration must survive
+-- >>> tornikegomareli.spaces:hyprbars >>>
+LUA
+cp "$XDG_CONFIG_HOME/hypr/hyprland.lua" "$TMP/before-malformed.lua"
+if "$ROOT/scripts/setup-hyprbars.sh" --remove >/dev/null 2>&1; then exit 1; fi
+cmp "$XDG_CONFIG_HOME/hypr/hyprland.lua" "$TMP/before-malformed.lua"
 
 printf 'hyprbars setup smoke ok\n'

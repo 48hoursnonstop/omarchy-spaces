@@ -48,8 +48,8 @@
     "supportedApi": "0.56.x"
   },
   "hyprbars": {
-    "required": false,
-    "enabledByDefault": false,
+    "required": true,
+    "enabledByDefault": true,
     "repository": "https://github.com/hyprwm/hyprland-plugins",
     "manager": "hyprpm",
     "reviewedApi": [
@@ -62,6 +62,7 @@
       "maximize",
       "close"
     ],
-    "emptyTitlebarRightClick": false
+    "emptyTitlebarRightClick": false,
+    "testedCommit": "7644cecdb947060682891a0db2a0cdc5c0b9e704"
   }
 }

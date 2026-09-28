@@ -60,19 +60,19 @@ Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agen
 git clone --branch feature/window-controls https://github.com/48hoursnonstop/omarchy-spaces.git \
   ~/.config/omarchy/plugins/tornikegomareli.spaces
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
-omarchy plugin disable omarchy.workspaces   # optional: replace the built-in switcher
 ```
 
 Requirements:
 
 - Omarchy 4.0.4 with its Quickshell bar; reviewed with Quickshell 0.3.1
 - Hyprland **0.56.x**, using its Lua dispatcher API
-- Rust 1.89 or newer, Cargo, a C linker and `jq` to build the helper
+- Rust 1.89 or newer, Cargo, a C linker, Python 3 and `jq`
+- Official Hyprbars through `hyprpm`; for a first build: Git, cpio, CMake, Meson, GCC and Make
 - Claude Code, only for agent status
 
-This fork keeps the plugin ID `tornikegomareli.spaces`, so it replaces an upstream Spaces installation and preserves its settings and agent hooks. If that directory already exists, use your existing checkout to switch to this fork's branch; do not clone over it. The installer validates and builds before enabling. Do not enable directly before building the helper.
+This fork keeps the plugin ID `tornikegomareli.spaces`, so it replaces an upstream Spaces installation and preserves its settings and agent hooks. If that directory already exists, use your existing checkout to switch to this fork's branch; do not clone over it. `install.sh` validates, builds the helper, installs Hyprbars and replaces the built-in workspace switcher in its existing position. It records the prior placement/settings for uninstall and checks both Spaces and Hyprbars before reporting success. Do not enable directly before installation.
 
-Its helper, preferences, lock and hidden workspace use their own Spaces namespace. It does not import workspace-taskbar's restore journal or take ownership of windows hidden by that plugin. Restore those windows with workspace-taskbar before replacing it. Optional Hyprbars controls must have only one owner.
+Its helper, preferences, lock and hidden workspace use their own Spaces namespace. It does not import workspace-taskbar's restore journal or take ownership of windows hidden by that plugin. Restore those windows with workspace-taskbar before replacing it. Hyprbars controls must have only one owner; remove any previous titlebar integration before installing this one.
 
 To update, then load the new code:
 
@@ -80,16 +80,19 @@ To update, then load the new code:
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/update.sh
 ```
 
+Updates follow the installed Git branch, build the candidate helper before changing the running version, and refresh Hyprbars. Local source changes stop an update. A failed activation restores the previous source and helper while retaining the recovery journal. Use this script instead of `omarchy plugin update`, which follows the remote's default branch and does not build the helper.
+
 ## Remove
 
 ```sh
-~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/uninstall.sh
-omarchy plugin enable omarchy.workspaces   # bring back the built-in switcher
+~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/uninstall.sh --yes
 ```
 
-If you added the agent hooks or the settings key below, delete those lines from `~/.claude/settings.json` and `~/.config/hypr/bindings.lua`.
+Uninstall removes the Spaces widget and plugin settings, its managed Lua import/configuration, helper binaries, cache, restore journal, preferences and installed source. It restores the workspace switcher's previous position/settings and removes the exact Claude command hooks shown above while retaining other hooks. No source backup is left behind. If installed through a symlink, only the installation link is removed; the development checkout remains.
 
-The uninstall script restores hidden windows and verifies recovery before removing runtime state. If recovery fails it stops with the journal preserved. Do not use `omarchy plugin remove` alone while windows are minimized. Pins and application overrides are retained as preferences.
+Hidden windows are restored and recovery is verified before their journal/helper are deleted. A failure stops cleanup with recovery data retained for retry. Pre-existing Hyprbars installations and repositories shared by other plugins are preserved. The empty session lock inode remains until logout to avoid allowing concurrent processes to acquire different locks.
+
+Add `--keep-settings` to retain pins and application overrides explicitly. Any custom keybinding you wrote yourself in `~/.config/hypr/bindings.lua` must be removed manually; the installer does not add keybindings. Do not use `omarchy plugin remove` alone while windows are minimized. See [production installation and removal](docs/production.md).
 
 ## Using it
 
@@ -138,6 +141,7 @@ cargo build --manifest-path backend/Cargo.toml --locked --release
 SPACES_TEST_BINARY="$CARGO_TARGET_DIR/release/spaces-backend" python3 tests/backend/test_transactions.py
 tests/smoke/static.sh
 python3 tests/smoke/lifecycle.test.py
+python3 tests/smoke/update.test.py
 scripts/check-qml.sh
 python3 tests/qml/service.test.py
 # Optional graphical test: requires labwc and wtype; starts its own compositor.
@@ -174,9 +178,11 @@ Default paths (all honor their corresponding XDG variable):
 
 Application overrides select an existing AppLibrary desktop entry, for example `{"matches":{"window-class":"desktop-entry-id"}}` in `overrides.json`. A missing icon uses a placeholder; Spaces does not scan icon directories or replace the launcher's icon choices.
 
-## Optional titlebar controls
+## Titlebar controls
 
-`scripts/setup-hyprbars.sh` installs minimize, maximize/restore and close buttons through the official Hyprbars plugin and `hyprpm`. Use `--status` to inspect it or `--remove` to remove the managed integration. Installation is optional and requires the Hyprbars build dependencies when the plugin is not already loaded. Existing workspace-taskbar titlebar integration must be removed first. Spaces does not add an empty-titlebar context menu.
+The standard installer includes minimize, maximize/restore and close buttons through the official Hyprbars plugin and `hyprpm`. Double-clicking the titlebar toggles maximized state through the same helper. Colors follow Omarchy's current theme; full-screen windows and applications advertising game content have no titlebar.
+
+Use `scripts/setup-hyprbars.sh --status` to inspect the integration or `--check` for its preflight. `scripts/doctor.sh` treats missing or unloaded Hyprbars as a failed installation. The script retains ownership metadata when removal fails, so cleanup can be retried. Spaces does not add an empty-titlebar context menu.
 
 ## License
 

@@ -1,9 +1,10 @@
 -- tornikegomareli.spaces managed Hyprbars config v1
--- Optional titlebar polish. The taskbar itself does not depend on Hyprbars.
+-- Titlebar controls installed with Spaces.
 
 local home = os.getenv("HOME") or ""
 local xdg_data = os.getenv("XDG_DATA_HOME") or (home .. "/.local/share")
 local xdg_config = os.getenv("XDG_CONFIG_HOME") or (home .. "/.config")
+local xdg_state = os.getenv("XDG_STATE_HOME") or (home .. "/.local/state")
 local action_helper = xdg_data .. "/tornikegomareli.spaces/bin/spaces-hyprbars-action"
 local override_path = xdg_config .. "/tornikegomareli.spaces/hyprbars-overrides.lua"
 
@@ -38,7 +39,7 @@ local function normalize_hex(value)
 end
 
 local function load_omarchy_colors()
-  local path = home .. "/.local/state/omarchy/current/theme/colors.toml"
+  local path = xdg_state .. "/omarchy/current/theme/colors.toml"
   local file = io.open(path, "r")
   if not file then return end
 
@@ -123,7 +124,7 @@ hl.config({
       bar_button_padding = 5,
       icon_on_hover = false,
       inactive_button_color = rgb(colors.muted),
-      on_double_click = [[hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" })']],
+      on_double_click = shell_quote(action_helper) .. " maximize",
     },
   },
 })
@@ -187,8 +188,8 @@ hl.window_rule({
   ["hyprbars:no_bar"] = true,
 })
 
--- Optional user-owned additions/exclusions. This file is never created,
--- overwritten, or removed by the plugin.
+-- Optional user-owned additions/exclusions. Installation never creates or
+-- overwrites this file; clean uninstall removes preferences unless retained.
 local override = io.open(override_path, "r")
 if override then
   override:close()

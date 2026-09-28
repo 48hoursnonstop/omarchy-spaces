@@ -50,16 +50,16 @@ else fail 'Hyprland config' 'query failed'; fi
 if plugins=$(hyprctl plugin list); then check 'compositor plugins' "${plugins:-none}"; else fail 'compositor plugins' 'query failed'; fi
 if command -v hyprpm >/dev/null; then
   check hyprpm "$(hyprpm list 2>&1)"
-else check Hyprbars 'optional; hyprpm not installed'; fi
+elif ! $pre_enable; then fail Hyprbars 'hyprpm not installed'; fi
 hypr_config="$CONFIG_HOME/hypr/spaces-hyprbars.lua"
 if [[ -f $hypr_config ]]; then
   helper="${XDG_DATA_HOME:-$HOME/.local/share}/$PLUGIN_ID/bin/spaces-hyprbars-action"
   if [[ -x $helper ]]; then pass 'Hyprbars helper'; else fail 'Hyprbars helper' missing; fi
-  if [[ $plugins != *hyprbars* ]]; then warn Hyprbars 'managed config present but decoration unavailable; core taskbar remains usable'; fi
+  if [[ $plugins != *hyprbars* ]] && ! $pre_enable; then fail Hyprbars 'managed decoration is not loaded'; fi
   for marker in '-- >>> tornikegomareli.spaces:hyprbars >>>' '-- <<< tornikegomareli.spaces:hyprbars <<<'; do
     [[ $(grep -Fxc -- "$marker" "$CONFIG_HOME/hypr/hyprland.lua") == 1 ]] || fail 'Hyprbars hook' 'missing or duplicated marker'
   done
-fi
+elif ! $pre_enable; then fail Hyprbars 'managed configuration missing'; fi
 if [[ $pre_enable == false ]]; then
   if catalog=$(omarchy plugin list --json) && jq -e --arg id "$PLUGIN_ID" 'any(.[]; .id == $id and .enabled == true)' <<<"$catalog" >/dev/null; then
     pass enabled

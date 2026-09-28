@@ -23,5 +23,6 @@ jobs:
       - run: shellcheck scripts/*.sh tests/smoke/*.sh hooks/claude-hook
       - run: tests/smoke/static.sh
       - run: python3 tests/smoke/lifecycle.test.py
+      - run: python3 tests/smoke/update.test.py
       - run: SPACES_TEST_BINARY="$CARGO_TARGET_DIR/release/spaces-backend" python3 tests/backend/test_transactions.py
       - run: git diff --exit-code

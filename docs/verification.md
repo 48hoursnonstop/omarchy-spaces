@@ -1,6 +1,6 @@
 # Window controls integration: verification
 
-Reviewed on 2026-09-27. Release candidate: **1.1.0-rc.1**, helper **0.9.0**, protocol **6**, state schema **1**.
+Reviewed on 2026-09-27. Release: **1.1.0**, helper **0.9.0**, protocol **6**, state schema **1**.
 
 The integration starts from Spaces `f8306d763c7b3c89d24172edb0e68fb6dacb68a9` (1.0.0) and adapts the window-control implementation from workspace-taskbar `c9e6165beab567a73b300dd485768c3ce8cb73cc` (0.14.0-rc.2). Both MIT notices are preserved.
 
@@ -10,7 +10,7 @@ Spaces keeps its existing plugin ID, workspace pills, live spatial preview, sett
 
 The journal restores a minimized window's workspace and monitor identity into the model even if Hyprland has removed its now-empty workspace. The private hidden workspace never becomes a user-facing pill. Manually minimized windows and Show desktop batches remain distinct. Workspaces moved to another monitor use current compositor metadata before saved monitor metadata.
 
-Window operations use the ported one-shot helper and its transactional journal, exclusive process lock, compatibility guard and recovery logic. Helper/data/state/config paths use the `tornikegomareli.spaces` namespace, and hidden windows use `special:omarchy-spaces-minimized`. There is no automatic migration from workspace-taskbar. Optional Hyprbars setup refuses a simultaneous workspace-taskbar titlebar integration.
+Window operations use the ported one-shot helper and its transactional journal, exclusive process lock, compatibility guard and recovery logic. Helper/data/state/config paths use the `tornikegomareli.spaces` namespace, and hidden windows use `special:omarchy-spaces-minimized`. There is no automatic migration from workspace-taskbar. Hyprbars is included in installation; setup refuses a competing titlebar configuration.
 
 ## Checks performed
 
@@ -21,17 +21,21 @@ Environment: Omarchy 4.0.4-1, Hyprland 0.56.2-2, Quickshell 0.3.1-1. The reviewe
 | Rust format, Clippy with warnings denied, release build | Passed |
 | Rust unit tests | 3 passed: exact addresses, Lua escaping, Pop tags |
 | Transaction tests | 18 passed against a mocked compositor: journal ordering, failures/retry, groups, desktop batches, workspace-scoped restore, saved monitor metadata, foreign-state isolation and recovery |
-| Lifecycle tests | 8 passed using isolated command fixtures for install, update and recovery-aware uninstall |
+| Lifecycle tests | 16 passed using isolated command fixtures: required Hyprbars installation, activation rollback, repeated install, complete removal, explicit preference retention, recovery failures, unrelated settings/hooks and dotfile/development symlinks |
+| Update tests | 4 passed against real temporary Git repositories: tracking branch selection, staging failures, source/helper rollback and preservation of local edits |
 | Model tests | 25 passed: original settings/layout/agent behavior plus minimized workspace projection, monitor reassignment, special workspace visibility, grouped minimized state and desktop batches |
-| App matcher and optional Hyprbars smoke checks | Passed, including idempotent setup/removal and action wrapper behavior |
+| App matcher and Hyprbars smoke checks | Passed: idempotent setup/removal, action wrapper behavior, pre-existing ownership, failed removal/retry, foreign config detection and failed compositor queries |
 | Bash syntax and ShellCheck | Passed for scripts, smoke tests and the agent hook |
 | Manifest and QML lint | Passed; dynamic host members are informational because their public facades lack full static type metadata |
 | Real service QML runtime | Passed with an isolated helper fixture: AppLibrary matching, pin persistence, no duplicate launchers, batch/group busy state, actual Process completion, failed operations and error retention |
 | Graphical QML runtime | Passed in a separate headless labwc compositor: top/bottom/left/right bar layouts, window/workspace/group menus, minimized preview state, keyboard selection/dismissal, a 45-window scrolling chooser, disabled actions when the helper is unavailable |
+| Real Hyprland + Hyprbars acceptance | Passed with three real Foot windows: official plugin load/reload/unload and clean Lua config, QML minimize/restore and restart with a minimized window, workspace projection, native keyboard focus/reopen/Escape, live preview capture, titlebar action helper, maximization, desktop batches, Pop, scratchpad, two virtual monitors with mixed scale, restore on the second monitor and recovery after its removal |
 
 `tests/qml/ui.test.py` uses the real Spaces components and installed native Omarchy UI components, with fixture window data. `wtype` sends actual Wayland key events. The fixture holds the native panel's exclusive focus prime while testing because headless labwc has no physical keyboard seat; this does **not** certify Hyprland's exclusive-to-on-demand focus handoff. No fake window controls dispatch into the user's compositor.
 
 The graphical fixture deliberately has no Hyprland IPC connection or captured application surfaces. Expected logs mention unavailable Hyprland IPC and software-rendering buffer fallback. It does not exercise real preview video, active-workspace styling driven by a live compositor, or real application window movement. It fails on QML TypeError, ReferenceError, binding loops, invalid assignments, failed assertions or incomplete screenshots.
+
+The separate `tests/qml/hyprland.test.py` suite closes those gaps with real Hyprland 0.56.2 nested inside a headless labwc. It loads the official Hyprbars build from commit `7644cecdb947060682891a0db2a0cdc5c0b9e704`, pinned by upstream for this compositor ABI. It runs the real service, widget, menu, helper and native Omarchy UI components. Only the host's application catalog is a small fixture. Native focus priming is unmodified; a persistent virtual keyboard provides a seat before panels open. Both initial and restarted Quickshell runs had no QML runtime warnings/errors.
 
 ## Reproduce
 
@@ -46,12 +50,22 @@ SPACES_UI_ARTIFACTS="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-spaces-dev/ui" \
 
 The runner finds `labwc` on PATH, or accepts a binary path through `SPACES_TEST_LABWC`. It creates its own runtime directory, socket and XDG directories and terminates its compositor afterward. Test screenshots are synthetic fixtures, not evidence of a production deployment.
 
-## Remaining live-session release checks
+For the real compositor suite, build official Hyprbars against the running Hyprland headers, then run:
 
-- Install the fork and helper in a disposable Omarchy session; verify reload and restart while windows are minimized and while an operation is pending.
-- Exercise real Wayland and XWayland windows: minimize/restore, grouped windows, Show desktop, floating geometry, fullscreen, Pop out, scratchpad, close and recovery after interruption. Exact tiled-tree reconstruction is outside the implementation's guarantee.
-- Check real preview capture and native keyboard focus on open, immediate reopen and outside-click dismissal.
-- Check physical multiple monitors, mixed scaling, per-monitor filtering, workspace migration and monitor removal with minimized windows.
-- Exercise the optional official Hyprbars integration against the running compositor ABI.
+```sh
+SPACES_TEST_BINARY="$CARGO_TARGET_DIR/release/spaces-backend" \
+SPACES_TEST_HYPRBARS=/path/to/official/hyprbars.so \
+SPACES_UI_ARTIFACTS="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-spaces-dev/acceptance" \
+  python3 tests/qml/hyprland.test.py
+```
 
-The user's installed bar and compositor configuration were not changed during this development pass. The implementation and automated checks are ready for that live-session validation; this document does not claim the remaining release matrix has passed.
+This requires labwc, Hyprland, Foot, grim, wtype and GPU rendering. The runner isolates XDG/IPC, denies access to a physical input seat, prevents systemd environment propagation, stubs `hyprpm` only in the fixture (the official library is loaded directly), and terminates all child processes. It never starts another Omarchy shell on the user's compositor.
+
+## Coverage limits
+
+- Real acceptance used Wayland Foot windows. XWayland applications, application-specific fullscreen behavior, grouped-window interruption and physical monitor hotplug still need broader hardware/application coverage. Transaction failures/groups are covered by mocked-compositor tests.
+- Installer/`hyprpm` ownership and rollback use isolated command fixtures; the real compositor suite directly loads the official ABI-matched library. A fresh download/build through `hyprpm` and complete Omarchy host registration were not run on the user's installed session.
+- Real monitor movement/removal used virtual outputs, including 1.25 scaling. This is not certification for every physical multi-GPU or mixed-DPI configuration.
+- Exact tiled-tree reconstruction is outside the implementation's guarantee. Custom user-written keybindings and shared system packages are not removed by uninstall.
+
+The user's installed bar and compositor configuration were not changed during this preparation. The release is packaged for the supported baseline with the above coverage; no production deployment or universal hardware certification is claimed.

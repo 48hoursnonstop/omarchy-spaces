@@ -56,7 +56,8 @@ state_flag() {
   [[ -f $OWNERSHIP ]] || { printf '%s\n' "$default"; return; }
   local value
   value=$(sed -n "s/^${key}=//p" "$OWNERSHIP" | tail -1)
-  [[ $value == 0 || $value == 1 ]] && printf '%s\n' "$value" || printf '%s\n' "$default"
+  [[ $value == 0 || $value == 1 ]] || { echo "Invalid Hyprbars ownership field: $key" >&2; return 2; }
+  printf '%s\n' "$value"
 }
 
 hook_state() {
@@ -65,7 +66,11 @@ hook_state() {
   b=$(grep -Fxc -- "$BEGIN_MARKER" "$HYPR_ENTRY" || true)
   e=$(grep -Fxc -- "$END_MARKER" "$HYPR_ENTRY" || true)
   if [[ $b == 0 && $e == 0 ]]; then printf 'absent\n'
-  elif [[ $b == 1 && $e == 1 ]]; then printf 'present\n'
+  elif [[ $b == 1 && $e == 1 ]] && awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" '
+    $0 == begin { start=NR }
+    $0 == end { stop=NR }
+    END { exit(!(start > 0 && stop > start)) }
+  ' "$HYPR_ENTRY"; then printf 'present\n'
   else printf 'malformed\n'
   fi
 }
@@ -113,11 +118,21 @@ EOF_HOOK
 
 other_hyprbars_config_exists() {
   [[ -d $HYPR_DIR ]] || return 1
-  local hit
-  hit=$(grep -RIl --include='*.lua' -E 'hl\.plugin\.hyprbars|plugin[[:space:]]*=.*hyprbars|hyprbars' "$HYPR_DIR" 2>/dev/null \
-    | grep -Fv "$HYPR_CONFIG" \
-    | head -1 || true)
-  [[ -n $hit ]]
+  python3 - "$HYPR_DIR" "$HYPR_CONFIG" "$BEGIN_MARKER" "$END_MARKER" <<'PY'
+from pathlib import Path
+import sys
+root, managed, begin, end = sys.argv[1:]
+for path in Path(root).rglob('*.lua'):
+    if path == Path(managed):
+        continue
+    text = path.read_text()
+    if begin in text and end in text:
+        a, tail = text.split(begin, 1)
+        text = a + tail.split(end, 1)[1]
+    if 'hyprbars' in text:
+        sys.exit(0)
+sys.exit(1)
+PY
 }
 
 check_requirements() {
@@ -126,7 +141,7 @@ check_requirements() {
 
   # Runtime-only refreshes should not require a compiler toolchain after the
   # official plugin is already installed, enabled and loaded.
-  for cmd in hyprctl hyprpm jq; do
+  for cmd in hyprctl hyprpm jq python3; do
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
 
@@ -160,30 +175,31 @@ remove_mode() {
   local enabled_owned repo_owned
   enabled_owned=$(state_flag PLUGIN_ENABLED_BY_PROJECT 0)
   repo_owned=$(state_flag REPO_ADDED_BY_PROJECT 0)
+  if ((enabled_owned || repo_owned)) && ! command -v hyprpm >/dev/null; then
+    echo 'hyprpm is required to remove the Hyprbars resources installed by Spaces.' >&2
+    exit 2
+  fi
 
   if [[ $(hook_state) == malformed ]]; then
     echo "Refusing removal because the managed hook markers are malformed in $HYPR_ENTRY" >&2
     exit 3
   fi
 
-  remove_hook
   if [[ -f $HYPR_CONFIG ]]; then
-    if grep -Fq -- "$MANAGED_MARKER" "$HYPR_CONFIG"; then
-      rm -f -- "$HYPR_CONFIG"
-    else
-      echo "Leaving unrecognized file untouched: $HYPR_CONFIG" >&2
-    fi
+    grep -Fq -- "$MANAGED_MARKER" "$HYPR_CONFIG" || { echo "Refusing to remove an unrecognized file: $HYPR_CONFIG" >&2; exit 3; }
   fi
+  remove_hook
+  rm -f -- "$HYPR_CONFIG"
   rm -f -- "$HELPER_DEST"
 
-  hyprctl reload >/dev/null 2>&1 || true
+  hyprctl reload >/dev/null
 
   if command -v hyprpm >/dev/null 2>&1 && [[ $enabled_owned == 1 ]]; then
     if other_hyprbars_config_exists; then
       echo 'Hyprbars remains enabled because other ~/.config/hypr configuration references it.' >&2
     elif hyprbars_enabled; then
       hyprpm disable "$HYPRBARS_NAME"
-      hyprpm reload >/dev/null 2>&1 || true
+      hyprpm reload >/dev/null
     fi
   fi
 
@@ -191,29 +207,28 @@ remove_mode() {
     if repo_has_enabled_plugins; then
       echo 'Official hyprland-plugins repository remains installed because another plugin is enabled.' >&2
     else
-      hyprpm remove "$REPO_NAME" || true
+      hyprpm remove "$REPO_NAME"
     fi
   fi
 
-  rm -f -- "$OWNERSHIP"
-  rmdir "$STATE_DIR" 2>/dev/null || true
-
-  hyprctl reload >/dev/null 2>&1 || true
+  hyprctl reload >/dev/null
   local errors
-  errors=$(hyprctl configerrors 2>/dev/null || true)
+  errors=$(hyprctl configerrors)
   if [[ -n $errors ]]; then
     echo 'Hyprland reports config errors after Hyprbars integration removal:' >&2
     printf '%s\n' "$errors" >&2
     exit 4
   fi
+  rm -f -- "$OWNERSHIP"
+  rmdir "$STATE_DIR" 2>/dev/null || true
 
   echo 'Spaces Hyprbars integration removed.'
 }
 
-setup_mode() {
+preflight() {
   check_requirements
 
-  if [[ -f "$HYPR_DIR/workspace-taskbar-hyprbars.lua" ]]; then
+  if other_hyprbars_config_exists; then
     echo 'Another Hyprbars configuration is present. Remove its integration before enabling Spaces titlebar buttons.' >&2
     exit 3
   fi
@@ -223,6 +238,19 @@ setup_mode() {
     exit 3
   fi
   [[ $(hook_state) != malformed ]] || { echo "Managed hook markers are malformed in $HYPR_ENTRY" >&2; exit 3; }
+}
+
+save_ownership() {
+  local repo=$1 plugin=$2
+  local temporary
+  temporary=$(mktemp "$STATE_DIR/.hyprbars-ownership.XXXXXX")
+  printf 'SCHEMA_VERSION=1\nREPO_ADDED_BY_PROJECT=%s\nPLUGIN_ENABLED_BY_PROJECT=%s\nCONFIG_INSTALLED_BY_PROJECT=1\nHOOK_INSTALLED_BY_PROJECT=1\n' "$repo" "$plugin" > "$temporary"
+  chmod 0600 "$temporary"
+  mv -f -- "$temporary" "$OWNERSHIP"
+}
+
+setup_mode() {
+  preflight
 
   mkdir -p "$STATE_DIR" "$(dirname "$HELPER_DEST")"
 
@@ -243,21 +271,29 @@ setup_mode() {
 
   rollback() {
     local code=$?
+    local cleanup_ok=true
     trap - ERR
     echo 'Hyprbars setup failed; rolling back only Spaces changes.' >&2
 
-    if ((hook_added_run)); then remove_hook || true; fi
+    if ((hook_added_run)); then remove_hook || cleanup_ok=false; fi
     if ((config_existed)); then cp -p "$config_backup" "$HYPR_CONFIG"; else rm -f -- "$HYPR_CONFIG"; fi
     if ((helper_existed)); then cp -p "$helper_backup" "$HELPER_DEST"; else rm -f -- "$HELPER_DEST"; fi
 
     if ((enabled_plugin_run)); then
-      hyprpm disable "$HYPRBARS_NAME" >/dev/null 2>&1 || true
-      hyprpm reload >/dev/null 2>&1 || true
+      hyprpm disable "$HYPRBARS_NAME" >/dev/null 2>&1 || cleanup_ok=false
+      hyprpm reload >/dev/null 2>&1 || cleanup_ok=false
     fi
     if ((added_repo_run)); then
-      hyprpm remove "$REPO_NAME" >/dev/null 2>&1 || true
+      hyprpm remove "$REPO_NAME" >/dev/null 2>&1 || cleanup_ok=false
     fi
-    hyprctl reload >/dev/null 2>&1 || true
+    hyprctl reload >/dev/null 2>&1 || cleanup_ok=false
+    if $cleanup_ok; then
+      if ((prior_repo_owned || prior_plugin_owned || config_existed)); then
+        save_ownership "$prior_repo_owned" "$prior_plugin_owned"
+      else
+        rm -f -- "$OWNERSHIP"
+      fi
+    fi
     rm -f "$config_backup" "$helper_backup"
     exit "$code"
   }
@@ -271,13 +307,15 @@ setup_mode() {
   fi
 
   if ((repo_was_present == 0)); then
-    hyprpm add "$OFFICIAL_REPO"
     added_repo_run=1
+    save_ownership 1 "$prior_plugin_owned"
+    hyprpm add "$OFFICIAL_REPO"
   fi
 
   if ((plugin_was_enabled == 0)); then
-    hyprpm enable "$HYPRBARS_NAME"
     enabled_plugin_run=1
+    save_ownership "$((prior_repo_owned || added_repo_run))" 1
+    hyprpm enable "$HYPRBARS_NAME"
   fi
 
   hyprpm reload
@@ -292,21 +330,14 @@ setup_mode() {
 
   hyprbars_loaded || { echo 'Hyprbars unloaded after config reload.' >&2; false; }
   local errors
-  errors=$(hyprctl configerrors 2>/dev/null || true)
+  errors=$(hyprctl configerrors)
   [[ -z $errors ]] || { echo 'Hyprland config errors after Hyprbars setup:' >&2; printf '%s\n' "$errors" >&2; false; }
 
   local repo_owned=$prior_repo_owned plugin_owned=$prior_plugin_owned
   ((added_repo_run)) && repo_owned=1
   ((enabled_plugin_run)) && plugin_owned=1
 
-  cat > "$OWNERSHIP" <<EOF_STATE
-SCHEMA_VERSION=1
-REPO_ADDED_BY_PROJECT=$repo_owned
-PLUGIN_ENABLED_BY_PROJECT=$plugin_owned
-CONFIG_INSTALLED_BY_PROJECT=1
-HOOK_INSTALLED_BY_PROJECT=1
-EOF_STATE
-  chmod 0600 "$OWNERSHIP"
+  save_ownership "$repo_owned" "$plugin_owned"
 
   trap - ERR
   rm -f "$config_backup" "$helper_backup"
@@ -320,8 +351,9 @@ case "${1:-}" in
   ''|--setup) setup_mode ;;
   --remove) remove_mode ;;
   --status) status_mode ;;
+  --check) preflight ;;
   -h|--help)
-    echo "usage: ${0##*/} [--setup|--remove|--status]"
+    echo "usage: ${0##*/} [--setup|--remove|--status|--check]"
     ;;
   *)
     echo "usage: ${0##*/} [--setup|--remove|--status]" >&2

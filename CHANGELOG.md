@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 (fork)
+
+- Hyprbars is included in normal installation and required by the final health check; titlebar double-click uses the same exact-address action helper as its buttons.
+- Installation records and replaces the original workspace widget's placement. Failure rolls back the bar and managed titlebar integration.
+- Clean uninstall restores hidden windows and the previous workspace widget, removes Spaces source/runtime/preferences/settings/hooks, preserves unrelated settings and shared Hyprbars resources, and retains recovery data on failures. `--keep-settings` is available explicitly.
+- Updates build a candidate before activation, follow the installed tracking branch and roll back source/helper on activation failure.
+- Added lifecycle/rollback regressions and real nested Hyprland acceptance with official Hyprbars, real windows, native menu keyboard focus, preview capture, QML restart, two scaled monitors and recovery after monitor removal.
+
 ## 1.1.0-rc.1 (fork)
 
 - Integrated transactional minimize/restore and Show desktop into workspace pills; minimized windows retain their original workspace and monitor.
