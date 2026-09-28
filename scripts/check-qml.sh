@@ -14,4 +14,4 @@ ln -s "$OMARCHY_PATH/shell" "$imports/qs"
 # is absent from the installed Quickshell qmltypes. Keep these diagnostics as
 # informational; all other warnings (including syntax/import failures) fail.
 "$LINT" -W 0 --missing-property info --signal-handler-parameters info -I "$imports" \
-  "$ROOT/Spaces.qml" "$ROOT/SpacesService.qml" "$ROOT/WindowMenu.qml"
+  "$ROOT/ShowDesktop.qml" "$ROOT/Spaces.qml" "$ROOT/SpacesService.qml" "$ROOT/WindowMenu.qml"

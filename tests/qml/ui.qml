@@ -181,7 +181,7 @@ ShellRoot {
       case 6:
         testRoot.check(spaces.previewOpen, "Minimized workspace has no preview")
         const preview = spaces.data.find(function(item) { return item.objectName === "workspacePreview" })
-        testRoot.check(preview.minimizedWindows.length === 1 && preview.visibleWindows === 1, "Preview mixed hidden and live windows")
+        testRoot.check(preview.workspace.windows.filter(function(w) { return w.minimized }).length === 1 && preview.workspace.windows.length === 2, "Preview lost minimized window restore targets")
         testRoot.capture(preview.contentItem[0].parent.parent, "preview", 61)
         break
       case 61:

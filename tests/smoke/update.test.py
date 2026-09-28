@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise branch selection and rollback against a real local Git remote."""
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,6 +27,10 @@ class Update(unittest.TestCase):
         self.git(self.source, "init", "-b", "main")
         (self.source / "scripts").mkdir()
         shutil.copy2(ROOT / "scripts/update.sh", self.source / "scripts/update.sh")
+        shutil.copy2(ROOT / "scripts/installation-state.py", self.source / "scripts/installation-state.py")
+        config = self.base / "config/omarchy/shell.json"
+        config.parent.mkdir(parents=True)
+        config.write_text('{"bar":{"layout":{"left":[{"id":"tornikegomareli.spaces"}],"right":[{"id":"omarchy.power"}]}},"plugins":[]}')
         for name in ("doctor.sh", "setup-hyprbars.sh"):
             self.script(self.source / "scripts" / name, "exit 0")
         self.script(self.source / "scripts/build-backend.sh", '''
@@ -46,12 +51,16 @@ chmod +x "$dest/spaces-backend"
         self.script(self.source / "scripts/setup-hyprbars.sh", '[[ ${1:-} == --check ]] && exit 0\nexit "${MOCK_SETUP_FAIL:-0}"')
         self.git(self.source, "add", ".")
         self.git(self.source, "commit", "-m", "release update")
+        self.script(self.source / "scripts/doctor.sh", 'exit "${MOCK_DOCTOR_FAIL:-0}"')
+        self.git(self.source, "add", ".")
+        self.git(self.source, "commit", "--amend", "--no-edit")
         # Remote HEAD deliberately points at main, as on the user's fork.
         self.git(self.source, "checkout", "main")
         self.binary = self.base / "data" / PLUGIN / "bin/spaces-backend"
         self.script(self.binary, "echo old")
         for command in ("omarchy", "omarchy-shell"):
             self.script(self.base / "bin" / command, "exit 0")
+        self.script(self.base / "bin/sleep", "exit 0")
         self.env["PATH"] = str(self.base / "bin") + ":" + self.env["PATH"]
 
     def git(self, directory, *args):
@@ -69,8 +78,18 @@ chmod +x "$dest/spaces-backend"
     def test_follows_installed_branch_and_refreshes_helper(self):
         self.update()
         self.assertEqual((self.plugin / "version").read_text(), "new")
+        config = json.loads((self.base / "config/omarchy/shell.json").read_text())
+        self.assertEqual(config["bar"]["layout"]["right"][-1]["id"], PLUGIN + ".desktop")
         self.assertIn("echo new", self.binary.read_text())
         self.assertEqual(self.git(self.plugin, "status", "--porcelain").stdout, "")
+
+    def test_failed_activation_restores_previous_bar_without_corner_entry(self):
+        config = self.base / "config/omarchy/shell.json"
+        before = json.loads(config.read_text())
+        self.env["MOCK_DOCTOR_FAIL"] = "1"
+        self.update(ok=False)
+        self.assertEqual(json.loads(config.read_text()), before)
+        self.assertEqual(self.git(self.plugin, "rev-parse", "HEAD").stdout.strip(), self.old)
 
     def test_failed_build_keeps_installed_version(self):
         self.env["MOCK_BUILD_FAIL"] = "1"

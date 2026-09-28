@@ -266,7 +266,7 @@ Panel {
       var raw = tl ? tl.lastIpcObject || {} : {}
       var geometry = row.minimized && root.service ? root.service.minimizedRecordsByAddress[row.address] || raw : raw
       return Object.assign({}, row, {
-        appId: row.desktopId || row.appId,
+        appId: row.appId,
         focused: row.active && !row.minimized,
         at: geometry.at && geometry.at.length === 2 ? [geometry.at[0], geometry.at[1]] : null,
         size: geometry.size && geometry.size.length === 2 ? [geometry.size[0], geometry.size[1]] : null,
@@ -382,14 +382,107 @@ Panel {
     onTriggered: root.revision++
   }
 
-  // App identity follows the same public AppLibrary facade as Omarchy's
-  // launcher. The service owns matching, overrides and refreshes.
-  function appInfo(desktopId) {
-    var info = root.service ? root.service.appPresentationById[desktopId] : null
-    return info ? { source: info.icon, name: info.name } : { source: "", name: "Unmatched application" }
+  // ------------------------------------------------------------ app icons
+
+  property var iconIndex: ({})
+  property var pendingIconIndex: ({})
+  property var iconCache: ({})
+  property int iconRevision: 0
+
+  function findDesktopEntry(appId) {
+    if (!appId) return null
+    var candidates = Model.appIdCandidates(appId)
+    for (var c = 0; c < candidates.length; c++) {
+      var byId = DesktopEntries.byId(candidates[c])
+      if (byId) return byId
+    }
+    var entry = DesktopEntries.heuristicLookup(appId)
+    if (entry) return entry
+
+    var host = Model.webAppHost(appId)
+    if (host === "") return null
+    var apps = DesktopEntries.applications.values
+    for (var i = 0; i < apps.length; i++) {
+      var exec = String(apps[i].execString || "")
+      if (exec.indexOf("//" + host) !== -1) return apps[i]
+    }
+    return null
   }
 
-  Component.onCompleted: Hyprland.refreshToplevels()
+  function iconUrl(name) {
+    var value = String(name || "")
+    if (value === "") return ""
+    if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0) return value
+    if (value.charAt(0) === "/") return Util.fileUrl(value)
+    var indexed = root.iconIndex[value]
+    if (indexed) return Util.fileUrl(indexed)
+    return Quickshell.iconPath(value, true)
+  }
+
+  // Returns { source, name } for an app id; cached until icons rescan.
+  function appInfo(appId) {
+    root.iconRevision
+    var key = Model.appKey(appId)
+    var cached = root.iconCache[key]
+    if (cached) return cached
+
+    var entry = findDesktopEntry(appId)
+    var source = iconUrl(entry && entry.icon ? entry.icon : appId)
+    if (source === "" && key !== appId) source = iconUrl(key)
+    var info = { source: source, name: entry && entry.name ? String(entry.name) : String(appId || "") }
+    root.iconCache[key] = info
+    return info
+  }
+
+  function invalidateIcons() {
+    root.iconCache = ({})
+    root.iconRevision++
+  }
+
+  function indexIconLine(line) {
+    var path = String(line || "").trim()
+    if (path === "") return
+    var name = Model.iconNameFromPath(path)
+    var existing = root.pendingIconIndex[name]
+    if (!existing || Model.iconPathScore(path) > Model.iconPathScore(existing))
+      root.pendingIconIndex[name] = path
+  }
+
+  Process {
+    id: iconScan
+    // Non-login shell on purpose: a login shell can touch ~/.local/share and
+    // retrigger desktop-entry watchers.
+    command: ["bash", "-c", [
+      'dirs="$HOME/.icons $HOME/.local/share/icons";',
+      'IFS=":"; for d in ${XDG_DATA_DIRS:-/usr/local/share:/usr/share}; do dirs="$dirs $d/icons"; done; unset IFS;',
+      'for base in $dirs; do [[ -d $base ]] && find "$base" -path "*/apps/*" \\( -name "*.svg" -o -name "*.png" \\) 2>/dev/null; done;',
+      'find /usr/share/pixmaps -maxdepth 1 \\( -name "*.svg" -o -name "*.png" \\) 2>/dev/null'
+    ].join(" ")]
+    stdout: SplitParser { onRead: function(line) { root.indexIconLine(line) } }
+    onStarted: root.pendingIconIndex = ({})
+    onExited: {
+      root.iconIndex = root.pendingIconIndex
+      root.invalidateIcons()
+    }
+  }
+
+  Connections {
+    target: DesktopEntries
+    function onApplicationsChanged() { iconDebounce.restart() }
+  }
+
+  Timer {
+    id: iconDebounce
+    interval: 1500
+    onTriggered: root.invalidateIcons()
+  }
+
+  Component.onCompleted: {
+    // Touching the list starts Quickshell's desktop-entry scan.
+    DesktopEntries.applications.values
+    iconScan.running = true
+    Hyprland.refreshToplevels()
+  }
 
   // ------------------------------------------------------------ previews
 
@@ -601,7 +694,6 @@ Panel {
         readonly property var workspace: root.workspaceMap[workspaceId] || ({ id: workspaceId, windows: [] })
         readonly property bool active: workspaceId === root.currentWorkspaceId
         readonly property bool occupied: workspace.windows.length > 0
-        readonly property bool desktopHidden: Model.desktopHidden(workspace.windows)
         readonly property bool hovered: pillHover.hovered
         onHoveredChanged: root.pillHovered(pill, hovered)
         readonly property bool showApps: Model.showsApps(root.cfg, occupied, active, hovered)
@@ -673,11 +765,11 @@ Panel {
           id: pillMouse
           anchors.fill: parent
           hoverEnabled: true
-          acceptedButtons: Qt.LeftButton
+          acceptedButtons: Qt.LeftButton | Qt.RightButton
           cursorShape: Qt.PointingHandCursor
-          onClicked: {
-            root.hidePreview()
-            root.clickWorkspace(pill.workspaceId)
+          onClicked: function(mouse) {
+            if (mouse.button === Qt.RightButton) root.openWorkspaceMenu(pill, pill.workspace)
+            else { root.hidePreview(); root.clickWorkspace(pill.workspaceId) }
           }
           onWheel: function(wheel) { root.scrollBy(wheel.angleDelta.y || wheel.angleDelta.x) }
         }
@@ -685,7 +777,7 @@ Panel {
         Grid {
           id: content
           anchors.centerIn: parent
-          columns: root.vertical ? 1 : 3
+          columns: root.vertical ? 1 : 2
           horizontalItemAlignment: Grid.AlignHCenter
           verticalItemAlignment: Grid.AlignVCenter
           spacing: pill.label !== "" && iconClip.shownExtent > 0 ? Style.space(5) : 0
@@ -765,7 +857,7 @@ Panel {
                   Behavior on dim { enabled: root.fastDur > 0; NumberAnimation { duration: root.fastDur } }
                   property real appear: root.dur > 0 ? 0 : 1
                   opacity: Math.min(1, appear)
-                  scale: iconMouse.pressed && root.cfg.animations ? 0.96 : 1
+                  scale: 0.4 + 0.6 * appear
                   Component.onCompleted: if (root.dur > 0) iconAppear.start()
                   NumberAnimation { id: iconAppear; target: appIcon; property: "appear"; to: 1; duration: root.dur; easing.type: Easing.OutBack }
                   Behavior on implicitWidth { enabled: root.dur > 0; NumberAnimation { duration: root.dur; easing.type: Easing.OutCubic } }
@@ -775,19 +867,6 @@ Panel {
                     radius: Style.cornerRadius > 0 ? Style.space(5) : 0
                     color: appIcon.focusedHere || appIcon.hovered ? Util.alpha(pill.textColor, 0.18) : "transparent"
                     Behavior on color { enabled: root.fastDur > 0; ColorAnimation { duration: root.fastDur } }
-                  }
-
-                  // A quiet rail carries window state without competing with
-                  // the agent badge above the icon. Minimized stays visible.
-                  Rectangle {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.bottom
-                    width: appIcon.item && appIcon.item.busy ? root.iconPx : Math.round(root.iconPx * 0.6)
-                    height: Style.space(2)
-                    radius: height / 2
-                    color: appIcon.item && appIcon.item.popped ? Color.accent : pill.textColor
-                    visible: !!appIcon.item && (appIcon.item.minimized || appIcon.item.busy || appIcon.item.popped)
-                    opacity: appIcon.item && appIcon.item.minimized ? 0.5 : 0.9
                   }
 
                   Row {
@@ -826,7 +905,7 @@ Panel {
                         color: Util.alpha(pill.textColor, 0.2)
                         Text {
                           anchors.centerIn: parent
-                          text: "?"
+                          text: String(appIcon.info.name || (appIcon.item ? appIcon.item.appId : "?")).charAt(0).toUpperCase()
                           color: pill.textColor
                           font.family: root.fontFamily
                           font.pixelSize: Math.round(root.iconPx * 0.62)
@@ -1004,17 +1083,7 @@ Panel {
             }
           }
 
-          ActionIcon {
-            visible: root.cfg.desktopButton && pill.workspaceId > 0 && pill.occupied
-              && (pill.active || pill.hovered || pill.desktopHidden)
-            symbol: pill.desktopHidden ? "\uf2d2" : "\uf108"
-            label: (pill.desktopHidden ? "Restore desktop" : "Show desktop") + " · Workspace " + pill.workspaceId
-            tint: pill.textColor
-            active: pill.desktopHidden
-            enabled: root.controlsReady && !root.controlsBusy && !pill.workspace.windows.some(function(w) { return w.busy })
-            onTriggered: root.showDesktop(pill.workspaceId)
-            onContextRequested: root.openWorkspaceMenu(pill, pill.workspace)
-          }
+
         }
       }
     }
@@ -1023,7 +1092,7 @@ Panel {
     // always / never, per settings); also lit while the panel is open.
     Item {
       id: gear
-      readonly property bool shown: root.opened || root.healthMessage.length > 0 || root.cfg.settingsButton === "always"
+      readonly property bool shown: root.opened || root.cfg.settingsButton === "always"
         || (root.cfg.settingsButton === "hover" && root.widgetHovered)
       readonly property real size: root.pillThickness
       property real extent: shown ? size : 0
@@ -1064,15 +1133,7 @@ Panel {
         onClicked: root.toggle()
         onContainsMouseChanged: containsMouse ? root.showTip(gear, root.healthMessage || "Spaces settings") : root.hideTip(gear)
       }
-      Rectangle {
-        visible: root.healthMessage.length > 0
-        anchors.right: parent.right
-        anchors.top: parent.top
-        width: Style.space(5)
-        height: width
-        radius: width / 2
-        color: root.bar ? root.bar.urgent : Color.urgent
-      }
+
     }
   }
 
@@ -1113,8 +1174,6 @@ Panel {
     open: root.previewOpen
 
     readonly property var workspace: root.workspaceMap[root.previewWorkspaceId] || null
-    readonly property var minimizedWindows: workspace ? workspace.windows.filter(function(w) { return w.minimized }) : []
-    readonly property int visibleWindows: workspace ? workspace.windows.length - minimizedWindows.length : 0
     readonly property var area: workspace ? workspace.area : null
     readonly property real mapWidth: Style.space(Model.previewWidth(root.cfg.previewSize))
     readonly property real mapHeight: area ? Math.round(mapWidth * area.height / area.width) : Math.round(mapWidth * 9 / 16)
@@ -1178,8 +1237,7 @@ Panel {
       Item {
         id: miniature
         width: preview.mapWidth
-        height: preview.visibleWindows > 0 ? preview.mapHeight : 0
-        visible: preview.visibleWindows > 0
+        height: preview.mapHeight
 
         Rectangle {
           anchors.fill: parent
@@ -1192,7 +1250,7 @@ Panel {
         Loader {
           id: miniatureLoader
           anchors.fill: parent
-          active: preview.visible && preview.visibleWindows > 0
+          active: preview.visible && preview.workspace !== null
           sourceComponent: miniatureComponent
         }
 
@@ -1211,75 +1269,11 @@ Panel {
         }
       }
 
-      // Minimized windows have no live surface. Keep them as restore chips
-      // below the spatial preview, rather than drawing stale window captures.
-      Flow {
-        width: preview.mapWidth
-        spacing: Style.space(4)
-        Repeater {
-          model: preview.minimizedWindows
-          delegate: Button {
-            id: restoreChip
-            required property var modelData
-            readonly property string fullLabel: "↗ " + String(modelData.title || modelData.appName)
-            text: chipMetrics.elidedText
-            width: Math.min(implicitWidth, preview.mapWidth)
-            enabled: root.controlsReady && !modelData.busy
-            foreground: root.fg
-            fontFamily: root.fontFamily
-            fontSize: Style.font.caption
-            bordered: true
-            horizontalPadding: Style.space(8)
-            verticalPadding: Style.space(4)
-            Accessible.name: "Restore " + fullLabel.slice(2)
-            onClicked: { root.focusWindow(modelData.address); root.hidePreview() }
-            TextMetrics {
-              id: chipMetrics
-              text: restoreChip.fullLabel
-              font.family: restoreChip.fontFamily
-              font.pixelSize: restoreChip.fontSize
-              elide: Text.ElideRight
-              elideWidth: preview.mapWidth - restoreChip.horizontalPadding * 2
-            }
-            MouseArea {
-              anchors.fill: parent
-              acceptedButtons: Qt.RightButton
-              onClicked: root.openWindowMenu(previewAnchor, { address: restoreChip.modelData.address })
-            }
-          }
-        }
-      }
-
-      Row {
-        width: preview.mapWidth
-        spacing: Style.space(4)
-        Button {
-          text: preview.workspace && Model.desktopHidden(preview.workspace.windows) ? "Restore desktop" : "Show desktop"
-          visible: root.previewWorkspaceId > 0
-          enabled: root.controlsReady && !root.controlsBusy
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.space(8)
-          verticalPadding: Style.space(4)
-          onClicked: root.showDesktop(root.previewWorkspaceId)
-        }
-        Button {
-          text: "Window actions…"
-          foreground: root.fg
-          fontFamily: root.fontFamily
-          fontSize: Style.font.caption
-          horizontalPadding: Style.space(8)
-          verticalPadding: Style.space(4)
-          onClicked: if (preview.workspace) root.openWorkspaceMenu(previewAnchor, preview.workspace)
-        }
-      }
-
       Text {
         id: previewFooter
         width: preview.mapWidth
         readonly property var hovered: root.windowByAddress(root.highlightAddress)
-        text: hovered ? hovered.title : preview.visibleWindows ? "Click to focus · Right-click for actions" : "Click a minimized window to restore it"
+        text: hovered ? hovered.title : "Click a window to jump to it"
         color: root.fg
         opacity: hovered ? 0.9 : 0.5
         elide: Text.ElideRight
@@ -1304,7 +1298,7 @@ Panel {
       id: mini
       readonly property var workspace: preview.workspace
       readonly property var layout: workspace
-        ? Model.previewLayout(workspace.windows.filter(function(w) { return !w.minimized }), workspace.area, width, height) : []
+        ? Model.previewLayout(workspace.windows, workspace.area, width, height) : []
       readonly property var rects: {
         var map = ({})
         for (var i = 0; i < layout.length; i++) map[layout[i].address] = layout[i]
@@ -1456,10 +1450,9 @@ Panel {
 
           SectionTitle { text: "WINDOW CONTROLS" }
           ToggleSetting { label: "Click active window to minimize"; description: "Grouped apps keep cycling through their windows"; key: "minimizeOnClick" }
-          ToggleSetting { label: "Show desktop button"; description: "Inside the active or hovered workspace"; key: "desktopButton" }
           Text {
             width: parent.width
-            text: "Right-click an app for window actions and pinning. Right-click the desktop button for workspace actions."
+            text: "Right-click an app for window actions and pinning. Right-click a workspace label for workspace actions. Show desktop is at the far end of the bar."
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: root.fg

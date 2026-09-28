@@ -8,7 +8,14 @@ ShellRoot {
   id: testRoot
   property var spaces: null
   property var menu: null
+  property var desktop: null
+  property var original: null
+  property string comparison: ""
+  property bool comparisonDone: false
+  property int comparisonStage: 0
   Component.onCompleted: {
+    desktop = Qt.createComponent("plugin/ShowDesktop.qml").createObject(canvas, { bar: bar })
+    desktop.x = Qt.binding(function() { return canvas.width - desktop.width - 8 })
     menu = Qt.createComponent("plugin/WindowMenu.qml").createObject(canvas, { service: service })
     spaces = Qt.createComponent("plugin/Spaces.qml").createObject(canvas, {
       bar: bar, settings: { showApps: "all", persistentWorkspaces: 5, animations: false, settingsButton: "always" }
@@ -59,6 +66,29 @@ ShellRoot {
     color: Color.background
     Rectangle { id: canvas; anchors.fill: parent; color: Color.background }
   }
+  Timer {
+    id: comparisonTimer
+    interval: 700
+    onTriggered: {
+      if (testRoot.comparisonStage === 0) {
+        spaces.grabToImage(function(result) {
+          result.saveToFile(Quickshell.env("SPACES_UI_ARTIFACTS") + "/fork-" + comparison + ".png")
+          spaces.visible = false
+          original.visible = true
+          testRoot.comparisonStage = 1
+          comparisonTimer.restart()
+        })
+      } else {
+        original.grabToImage(function(result) {
+          result.saveToFile(Quickshell.env("SPACES_UI_ARTIFACTS") + "/upstream-" + comparison + ".png")
+          original.destroy()
+          original = null
+          spaces.visible = true
+          comparisonDone = true
+        })
+      }
+    }
+  }
   IpcHandler {
     target: "spaces-test"
     function status(): string {
@@ -68,8 +98,19 @@ ShellRoot {
       status.menuOpen = menu && menu.opened
       const panel = menu ? menu.data.find(function(item) { return item.objectName === "windowActionsPanel" }) : null
       status.menuFocus = !!panel && panel.focusTarget.activeFocus
+      status.comparisonDone = comparisonDone
       status.previewOpen = !!spaces && spaces.previewOpen
       return JSON.stringify(status)
+    }
+    function desktopClick(): void { desktop.toggleDesktop() }
+    function compare(name: string, settings: string): void {
+      spaces.hidePreview()
+      comparison = name
+      comparisonDone = false
+      comparisonStage = 0
+      spaces.settings = JSON.parse(settings)
+      original = Qt.createComponent("upstream/Spaces.qml").createObject(canvas, { bar: bar, settings: JSON.parse(settings), visible: false })
+      comparisonTimer.start()
     }
     function minimize(address: string): bool { return service.menuAction("minimize", address) }
     function restore(address: string): bool { return service.menuAction("restore", address) }

@@ -32,8 +32,7 @@ var DEFAULTS = {
   previewSize: "medium",      // "small" | "medium" | "large"
   previewLive: true,          // keep previews streaming; false = one frame
   agentStatus: true,          // badges for coding agents running in terminals
-  minimizeOnClick: true,
-  desktopButton: true
+  minimizeOnClick: true
 }
 
 var SHOW_APPS = ["all", "active", "hover", "hoverOnly"]
@@ -92,8 +91,7 @@ function resolveSettings(raw) {
     previewSize: oneOf(s.previewSize, PREVIEW_SIZES, d.previewSize),
     previewLive: bool(s.previewLive, d.previewLive),
     agentStatus: bool(s.agentStatus, d.agentStatus),
-    minimizeOnClick: bool(s.minimizeOnClick, d.minimizeOnClick),
-    desktopButton: bool(s.desktopButton, d.desktopButton)
+    minimizeOnClick: bool(s.minimizeOnClick, d.minimizeOnClick)
   }
 }
 
@@ -278,6 +276,47 @@ function focusedLabel(item, appName, maxLength) {
   return truncate(text, maxLength)
 }
 
+// Lookup keys for an app id, most specific first. Reverse-DNS ids such as
+// "dev.example.my-tool" often ship a desktop file named after the last part.
+function appIdCandidates(appId) {
+  var id = String(appId || "")
+  if (id === "") return []
+  var out = [id]
+  function add(v) { if (v && out.indexOf(v) === -1) out.push(v) }
+  add(id.toLowerCase())
+  var dot = id.lastIndexOf(".")
+  if (dot > 0 && dot < id.length - 1) {
+    add(id.slice(dot + 1))
+    add(id.slice(dot + 1).toLowerCase())
+  }
+  return out
+}
+
+// Chromium-family --app windows use classes like
+// "chrome-web.whatsapp.com__-Default" or "brave-app.hey.com__-Profile_1".
+// Returns the host ("web.whatsapp.com") or "" when the class is not one.
+function webAppHost(appId) {
+  var m = /^(?:chrome|chromium|brave|msedge|vivaldi|helium|opera)-([^_]+?)(?:__|_).*-(?:Default|Profile_\d+)$/i.exec(String(appId || ""))
+  return m ? m[1] : ""
+}
+
+// Icon candidates scanned from disk: prefer scalable, then the largest raster.
+function iconPathScore(path) {
+  var p = String(path || "")
+  if (/\.svg$/i.test(p)) return 100000
+  var m = /\/(\d+)x\d+\//.exec(p)
+  if (m) return Number(m[1])
+  return /\/pixmaps\//.test(p) ? 48 : 1
+}
+
+function iconNameFromPath(path) {
+  var value = String(path || "")
+  var slash = value.lastIndexOf("/")
+  var file = slash >= 0 ? value.slice(slash + 1) : value
+  var dot = file.lastIndexOf(".")
+  return dot > 0 ? file.slice(0, dot) : file
+}
+
 // Width of the workspace miniature, in unscaled px.
 function previewWidth(size) {
   if (size === "small") return 260
@@ -403,7 +442,8 @@ if (typeof module !== "undefined") {
     previewWidth: previewWidth, monitorArea: monitorArea, previewLayout: previewLayout, durationFor: durationFor,
     workspaceIds: workspaceIds, workspaceLabel: workspaceLabel, appKey: appKey,
     sortWindows: sortWindows, iconItems: iconItems, truncate: truncate,
-    focusedLabel: focusedLabel,
+    focusedLabel: focusedLabel, webAppHost: webAppHost, appIdCandidates: appIdCandidates, iconPathScore: iconPathScore,
+    iconNameFromPath: iconNameFromPath,
     stepWorkspace: stepWorkspace, mergedEntry: mergedEntry,
     projectWorkspaces: projectWorkspaces, desktopHidden: desktopHidden
   }

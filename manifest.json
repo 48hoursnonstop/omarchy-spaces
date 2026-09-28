@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tornikegomareli.spaces",
   "name": "Spaces",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "Tornike Gomareli",
   "description": "Workspace switcher with live previews, window controls, minimize/restore and pinned launchers",
   "kinds": [
@@ -241,12 +241,6 @@
         "key": "minimizeOnClick",
         "type": "bool",
         "label": "Click active window to minimize",
-        "default": true
-      },
-      {
-        "key": "desktopButton",
-        "type": "bool",
-        "label": "Show desktop button in workspaces",
         "default": true
       }
     ]

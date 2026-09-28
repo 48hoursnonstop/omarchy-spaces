@@ -30,10 +30,12 @@ XDG_DATA_HOME="$staging/data" "$staging/source/scripts/build-backend.sh"
 BIN="${XDG_DATA_HOME:-$HOME/.local/share}/$PLUGIN_ID/bin/spaces-backend"
 [[ -x $BIN ]] || { echo 'Missing installed helper. Run install.sh first.' >&2; exit 2; }
 cp -p -- "$BIN" "$staging/previous-backend"
+python3 "$staging/source/scripts/installation-state.py" checkpoint "$staging/placement.json"
 rollback() {
   local code=$?
   trap - ERR
   # The checkout was verified clean before starting the update.
+  python3 "$staging/source/scripts/installation-state.py" restore-checkpoint "$staging/placement.json" || true
   git -C "$ROOT" reset --hard "$old"
   install -m 0755 "$staging/previous-backend" "$BIN.rollback"
   mv -f -- "$BIN.rollback" "$BIN"
@@ -47,6 +49,8 @@ git -C "$ROOT" merge --ff-only "$next"
 install -m 0755 "$staging/data/$PLUGIN_ID/bin/spaces-backend" "$BIN.next"
 mv -f -- "$BIN.next" "$BIN"
 "$ROOT/scripts/setup-hyprbars.sh"
+python3 "$ROOT/scripts/installation-state.py" capture
+python3 "$ROOT/scripts/installation-state.py" place
 omarchy-shell shell rescanPlugins
 for _attempt in {1..60}; do
   if "$ROOT/scripts/doctor.sh" >"$staging/check.log" 2>&1; then

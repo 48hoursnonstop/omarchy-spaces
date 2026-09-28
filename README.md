@@ -8,16 +8,16 @@
 
 Spaces is a workspace switcher for the [Omarchy](https://omarchy.org) bar. Each workspace shows the icons of the apps open on it. The active one slides open, and the focused window is highlighted.
 
-This fork adds window controls from workspace-taskbar to [Tornike Gomareli's Spaces](https://github.com/tornikegomareli/omarchy-spaces). Minimized windows stay in their original workspace pill, desktop controls belong to each workspace, and window actions use Omarchy's native menus. The existing previews, settings, optional app grouping and agent badges remain part of Spaces.
+This fork adds window controls from workspace-taskbar to [Tornike Gomareli's Spaces](https://github.com/tornikegomareli/omarchy-spaces). Minimized windows stay in their original workspace pill, the desktop control sits at the far end of the bar, and window actions use Omarchy's native menus. The existing previews, settings, optional app grouping and agent badges remain part of Spaces.
 
 ## Window controls
 
 - Click a focused window to minimize it; click its dimmed icon to restore it. Turn this behavior off in settings if you prefer focus-only clicks. Grouped app icons keep cycling; their context menu lets you choose a specific window.
-- Use the desktop button inside an occupied workspace pill to hide that workspace's visible windows. Click again to restore that batch. Windows minimized separately stay minimized.
+- Use the narrow strip at the far right of the bar (bottom on a vertical bar) to hide that monitor's active workspace windows. Click again to restore that batch. Windows minimized separately stay minimized.
 - Right-click an app icon for minimize/restore, maximize, move to another workspace or monitor, scratchpad, Pop out, floating, fullscreen, pseudo, grouping, pinning or close. Availability follows the selected window's state.
-- Pin an application from its window menu. Closed applications appear in a compact launcher pill; a running or minimized application keeps its place in its workspace. App names, icons and launching come from Omarchy's AppLibrary.
-- Right-click the desktop button for workspace actions, including restoring its minimized windows. The layout switch is available on the focused workspace.
-- Minimized windows appear as restore buttons below the live workspace preview. The `+N` overflow opens a complete window list. Menus support arrows, Tab, Enter and Escape and scroll when necessary.
+- Pin an application from its window menu. Closed applications appear in a compact launcher pill; a running or minimized application keeps its place in its workspace. Pinning and launching use Omarchy's AppLibrary; workspace icons retain upstream Spaces' desktop-entry and icon lookup.
+- Right-click a workspace label for workspace actions, including restoring its minimized windows. The layout switch is available on the focused workspace.
+- Minimized windows keep their place in the spatial preview, using the original placeholder instead of a live capture. Click to restore. The `+N` overflow opens a complete window list. Menus support arrows, Tab, Enter and Escape and scroll when necessary.
 - Settings include Restore last, Restore all and Recover hidden windows, plus visible diagnostics for failed operations or an unavailable helper.
 
 The helper saves workspace, monitor, floating geometry, fullscreen, pin, pseudo and group state before hiding windows. Recovery retains unfinished operations for retry. It does not reconstruct the exact tiling tree. See [verification and remaining release checks](docs/verification.md).
@@ -108,7 +108,7 @@ Add `--keep-settings` to retain pins and application overrides explicitly. Any c
 
 Choose when icons show (always, active, on hover, or never), icon style and size, grouping by app, previews, agent status, the active workspace style, density, and more. Settings are saved to `~/.config/omarchy/shell.json`.
 
-The upstream screenshots show the original appearance; the new controls follow the same geometry, colors and font.
+The workspace pills retain the upstream appearance, including icon lookup and animations. New actions live in context menus and Hyprbars. The separate desktop strip occupies the far end of the bar; no buttons are inserted into workspace pills or preview cards.
 
 To open settings with a key, add this to `~/.config/hypr/bindings.lua`:
 

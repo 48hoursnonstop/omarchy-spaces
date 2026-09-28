@@ -6,7 +6,7 @@ The integration starts from Spaces `f8306d763c7b3c89d24172edb0e68fb6dacb68a9` (1
 
 ## Design and ownership
 
-Spaces keeps its existing plugin ID, workspace pills, live spatial preview, settings and agent IPC. A shared service owns AppLibrary identity, pins and the serialized helper queue. Each bar projects that service onto its own workspace model and owns its preview anchor. Native menus receive the service directly and anchor to the bar that opened them.
+Spaces keeps its existing plugin ID, workspace pills, live spatial preview, settings and agent IPC. A shared service owns AppLibrary identity for actions/pins and the serialized helper queue. Workspace icon presentation uses the original Spaces desktop-entry/icon resolver. Each bar projects that service onto its own workspace model and owns its preview anchor. Native menus receive the service directly and anchor to the bar that opened them.
 
 The journal restores a minimized window's workspace and monitor identity into the model even if Hyprland has removed its now-empty workspace. The private hidden workspace never becomes a user-facing pill. Manually minimized windows and Show desktop batches remain distinct. Workspaces moved to another monitor use current compositor metadata before saved monitor metadata.
 
@@ -69,3 +69,11 @@ This requires labwc, Hyprland, Foot, grim, wtype and GPU rendering. The runner i
 - Exact tiled-tree reconstruction is outside the implementation's guarantee. Custom user-written keybindings and shared system packages are not removed by uninstall.
 
 The user's installed bar and compositor configuration were not changed during this preparation. The release is packaged for the supported baseline with the above coverage; no production deployment or universal hardware certification is claimed.
+
+## 1.1.1 appearance correction
+
+The normal workspace pills are compared against upstream commit `f8306d7` in the same isolated Hyprland session with the same real windows. Pixel comparisons pass for default, expanded and grouped/focused-title configurations. The original icon appearance animation and icon lookup are restored; added desktop buttons, preview toolbars and state rails are removed. Minimized windows use the existing spatial preview placeholders as restore targets.
+
+`ShowDesktop.qml` is a custom QML bar entry appended after the final right-hand widget. Its narrow strip extends through Omarchy 4's eight-pixel trailing margin. On vertical bars it sits at the bottom. It calls Spaces' public IPC with the active workspace of its own monitor, sharing the existing batch journal. The live acceptance test exercises hide/restore through this component. Installation, update rollback and uninstall own only this entry and the existing Spaces placement; other bar entries are retained.
+
+The real compositor test additionally requires ImageMagick (`magick compare`) for upstream pixel comparison. It runs in an isolated compositor, without re-enabling the plugin in the user's session.

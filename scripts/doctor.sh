@@ -68,6 +68,9 @@ if [[ $pre_enable == false ]]; then
   if jq -e --arg id "$PLUGIN_ID" '(.bar.id // "omarchy.bar") == "omarchy.bar" and any(.bar.layout[]?[]?; .id == $id)' "$config" >/dev/null; then
     pass 'built-in bar / placement'
   else fail placement 'expected widget in built-in omarchy.bar'; fi
+  if jq -e '.bar.layout.right[-1].id == "tornikegomareli.spaces.desktop"' "$config" >/dev/null; then
+    pass 'desktop strip / corner'
+  else fail 'desktop strip' 'expected at the end of the bar'; fi
   if status=$(omarchy-shell tornikegomareli.spaces status) && jq -e '.backendHealthy and .protocolCompatible and .appLibraryHealthy' <<<"$status" >/dev/null; then
     check service "$status"
   else fail service "${status:-IPC unavailable}; check AppLibrary capability and backend"; fi

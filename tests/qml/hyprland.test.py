@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tempfile
 import time
@@ -125,11 +126,30 @@ hl.config({ animations = { enabled = false }, misc = { disable_hyprland_logo = t
         for module in ("Commons", "Ui"):
             (qml / module).symlink_to(host / module, target_is_directory=True)
         (qml / "plugin").symlink_to(ROOT, target_is_directory=True)
+        (qml / "upstream").mkdir()
+        for filename in ("Spaces.qml", "Model.js"):
+            (qml / "upstream" / filename).write_bytes(subprocess.check_output(["git", "-C", str(ROOT), "show", "f8306d7:" + filename]))
+        (base / "bin/omarchy-shell").write_text("#!/bin/sh\nexec qs ipc -p " + shlex.quote(str(qml)) + ' call "$@"\n')
+        (base / "bin/omarchy-shell").chmod(0o755)
+        env["SPACES_UI_ARTIFACTS"] = str(artifacts)
         shutil.copy(ROOT / "tests/qml/live.qml", qml / "shell.qml")
         widget = spawn(["qs", "-p", str(qml), "--no-color"], "quickshell")
         wait_for(lambda: status().get("backendHealthy") and status().get("projected") == 3, "Real service/workspace model did not load")
         assert status()["workspace"] == 3
         output("grim", str(artifacts / "hyprbars.png"))
+        ipc("desktopClick")
+        wait_for(lambda: status().get("minimized") == 3 and not status().get("batchBusy"), "Corner strip did not hide workspace")
+        ipc("desktopClick")
+        wait_for(lambda: status().get("minimized") == 0 and not status().get("batchBusy"), "Corner strip did not restore workspace")
+        for name, settings in (("default", {}), ("expanded", {"showApps": "all"}),
+                               ("grouped", {"showApps": "all", "groupApps": True, "focusedTitle": True})):
+            ipc("compare", name, json.dumps(dict(settings, animations=False)))
+            wait_for(lambda: status().get("comparisonDone"), "Visual comparison did not finish")
+            comparison = subprocess.run(["magick", "compare", "-metric", "AE",
+                str(artifacts / ("upstream-" + name + ".png")), str(artifacts / ("fork-" + name + ".png")),
+                str(artifacts / ("diff-" + name + ".png"))], capture_output=True, text=True)
+            assert comparison.returncode == 0, "Visual drift from upstream: " + name + " " + comparison.stderr
+        print("Upstream pixel comparison passed: default, expanded and grouped/title pills.")
         assert ipc("minimize", addresses[0]) == "true"
         wait_for(lambda: status().get("minimized") == 1 and not status().get("batchBusy"), "QML minimize did not complete")
         assert status()["projected"] == 3

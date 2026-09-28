@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Restore upstream Spaces icon presentation, icon appearance animation and spatial preview layout. Remove the added in-pill desktop button, preview toolbar and status rails.
+- Put Show Desktop in a separate narrow strip at the far end of the bar, with a clickable screen edge. Keep the same per-workspace hide/restore transactions.
+- Include the strip in install, update rollback and clean uninstall; window and workspace actions remain in context menus and Hyprbars.
+
 ## 1.1.0 (fork)
 
 - Hyprbars is included in normal installation and required by the final health check; titlebar double-click uses the same exact-address action helper as its buttons.
