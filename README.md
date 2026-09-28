@@ -57,7 +57,7 @@ Other agents can report the same way: `omarchy-shell tornikegomareli.spaces agen
 ## Install
 
 ```sh
-git clone --branch fix/v1-desktop-corner https://github.com/48hoursnonstop/omarchy-spaces.git \
+git clone --branch v1.1.2 https://github.com/48hoursnonstop/omarchy-spaces.git \
   ~/.config/omarchy/plugins/tornikegomareli.spaces
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
 ```
@@ -77,6 +77,9 @@ Its helper, preferences, lock and hidden workspace use their own Spaces namespac
 To update, then load the new code:
 
 ```sh
+# Once, to opt into updates after installing the pinned release:
+git -C ~/.config/omarchy/plugins/tornikegomareli.spaces switch -c installed-release
+git -C ~/.config/omarchy/plugins/tornikegomareli.spaces branch --set-upstream-to=origin/fix/v1-desktop-corner
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/update.sh
 ```
 

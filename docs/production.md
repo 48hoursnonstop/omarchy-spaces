@@ -1,4 +1,4 @@
-# Spaces 1.1.0: installation, updates and clean removal
+# Spaces 1.1.2: installation, updates and clean removal
 
 Supported baseline: Omarchy 4.0.4, Quickshell 0.3.1 and Hyprland 0.56.x with Lua configuration. Hyprbars is part of the standard installation. It is built/loaded through the official `hyprpm` repository so its ABI matches the running compositor; the release does not ship a generic precompiled Hyprbars library.
 
@@ -9,14 +9,14 @@ Required commands: `omarchy`, `omarchy-shell`, `hyprctl`, `hyprpm`, `jq`, Python
 For a fresh installation:
 
 ```sh
-git clone --branch feature/window-controls https://github.com/48hoursnonstop/omarchy-spaces.git \
+git clone --branch v1.1.2 https://github.com/48hoursnonstop/omarchy-spaces.git \
   ~/.config/omarchy/plugins/tornikegomareli.spaces
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/install.sh
 ```
 
 If Spaces is already installed, switch that checkout to this fork/branch first. Do not clone over it. If workspace-taskbar is installed, restore its hidden windows and remove its titlebar integration before replacing it. The two plugins have independent journals; Spaces does not guess another plugin's restoration metadata.
 
-The installer checks compatibility, compiles outside the watched source directory, installs the helper atomically, configures official Hyprbars and records the workspace switcher's original placement. Spaces replaces that widget in place. Existing Spaces settings are retained on repeat installation. Success requires a healthy service, compatible helper, clean compositor configuration and loaded titlebars.
+The installer checks compatibility, compiles outside the watched source directory, installs the helper atomically, configures official Hyprbars and records the workspace switcher's original placement. Spaces replaces that widget in place and adds the Show Desktop strip at the far right screen edge. Existing Spaces settings are retained on repeat installation. Success requires a healthy service, compatible helper, clean compositor configuration and loaded titlebars.
 
 If first-time activation fails, the installer rolls back the managed titlebar changes and previous bar entries. It retains the checkout, helper and installation/recovery state for retry or a clean uninstall. An interrupted installation does not discard its ownership journal.
 
@@ -24,6 +24,9 @@ If first-time activation fails, the installer rolls back the managed titlebar ch
 
 ```sh
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/doctor.sh
+# Once, to opt into updates after installing the pinned release:
+git -C ~/.config/omarchy/plugins/tornikegomareli.spaces switch -c installed-release
+git -C ~/.config/omarchy/plugins/tornikegomareli.spaces branch --set-upstream-to=origin/fix/v1-desktop-corner
 ~/.config/omarchy/plugins/tornikegomareli.spaces/scripts/update.sh
 ```
 
@@ -38,7 +41,7 @@ The updater follows the checkout's configured remote branch. It rejects local mo
 This removes:
 
 - The installed source directory, or just its link when using a development checkout.
-- Spaces entries/settings in `shell.json`, restoring the prior built-in workspace widget placement/settings without reverting other bar changes.
+- Spaces entries/settings and the desktop strip in `shell.json`, restoring the prior built-in workspace widget placement/settings without reverting other bar changes.
 - The managed `spaces-hyprbars.lua` file and its marked import in `hyprland.lua`.
 - Helper binaries, build cache, installation metadata, recovery journal and Spaces preferences.
 - Exact Spaces command hooks from Claude's `settings.json`, preserving other hooks and settings.

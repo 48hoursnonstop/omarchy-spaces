@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2 (fork)
+
+- Release the 1.1.0 interface with Show Desktop as a narrow strip touching the far right screen edge (bottom edge for vertical bars).
+- Disable the in-workspace desktop button by default and remove empty layout columns when controls or overflow are hidden.
+- Install and uninstall the separate strip together with Spaces. Keep Hyprbars, transactional window controls, previews, pins and recovery from 1.1.0.
+- This release follows the `fix/v1-desktop-corner` branch, not the separate appearance changes on `feature/window-controls`.
+
 ## 1.1.0 (fork)
 
 - Hyprbars is included in normal installation and required by the final health check; titlebar double-click uses the same exact-address action helper as its buttons.
